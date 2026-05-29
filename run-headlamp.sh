@@ -1,20 +1,17 @@
 #!/usr/bin/env bash
-# Run Headlamp locally (Docker) for NDK plugin development, with auto-discovery
-# of peer clusters enabled.
+# Run Headlamp locally (Docker) for NDK plugin development.
 #
 # What this sets up:
 #   - Headlamp web UI on :4466
 #   - Mounts the built plugin from ~/.config/Headlamp/plugins
 #   - Starts with ONLY the primary kubeconfig mounted
-#   - --enable-dynamic-clusters so the plugin can register peers via setCluster()
+#   - --enable-dynamic-clusters so the plugin's "Add cluster" button can register
+#     additional clusters at runtime via Headlamp.setCluster()
 #
-# The plugin discovers peers by reading NDK Remote CRs on the primary, then
-# fetching each peer's kubeconfig from a Secret named
-# `ndk-peer-kubeconfig-<remoteName>` in kube-system. Create that Secret with:
-#
-#   kubectl --kubeconfig <primary> -n kube-system create secret generic \
-#     ndk-peer-kubeconfig-<remoteName> --from-file=kubeconfig=<peer.kubeconfig>
-#
+# To view a peer cluster (e.g. the secondary for restore), use the AppBar
+# "Add cluster" button and paste/upload that cluster's kubeconfig. This is a UI
+# visibility convenience only — it has nothing to do with NDK replication, which
+# is configured separately via Remote + ReplicationTarget CRs.
 set -euo pipefail
 
 PRIMARY_KUBECONFIG="${PRIMARY_KUBECONFIG:-$HOME/workspace/ndk-syncrep/primary.kubeconfig}"
@@ -40,4 +37,4 @@ docker run -d --name headlamp -p "${PORT}:4466" \
   -enable-dynamic-clusters
 
 echo "Headlamp running on http://localhost:${PORT} (or http://<host-ip>:${PORT})"
-echo "Open the primary cluster — the NDK plugin will auto-register discovered peers."
+echo "Use the AppBar 'Add cluster' button to register additional clusters at runtime."

@@ -1,10 +1,10 @@
 // NDK Data Protection — Headlamp plugin entry point.
 // Owner: P1. Registers the sidebar entry, the /ndk route, and the AppBar
-// discovery chip. Feature components live under src/components and are owned
-// by P2/P3/P4 per the hackathon roadmap.
+// "Add cluster" button. Feature components live under src/components and are
+// owned by P2/P3/P4 per the hackathon roadmap.
 
 import { registerAppBarAction, registerRoute, registerSidebarEntry } from '@kinvolk/headlamp-plugin/lib';
-import { ClusterDiscoveryChip } from './components/ClusterDiscovery';
+import { AddClusterButton } from './components/AddClusterDialog';
 import { ProtectionDashboard } from './components/ProtectionDashboard';
 
 registerSidebarEntry({
@@ -23,4 +23,4 @@ registerRoute({
   component: () => <ProtectionDashboard />,
 });
 
-registerAppBarAction(<ClusterDiscoveryChip />);
+registerAppBarAction(<AddClusterButton />);

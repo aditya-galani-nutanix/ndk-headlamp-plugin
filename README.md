@@ -36,14 +36,13 @@ hot-reload automatically.
 
 ```
 src/
-  index.tsx                 # P1 — registers sidebar, /ndk route, AppBar discovery chip
+  index.tsx                 # P1 — registers sidebar, /ndk route, AppBar "Add cluster" button
   api/
     ndk-resources.ts        # P1 (shared) — K8s factories for all NDK CRDs
     types.ts                # P1 (shared) — NDK CR TypeScript interfaces
-    cluster-discovery.ts    # P1 — auto-discovery of peer clusters via Remote CRs
   components/
     ProtectionDashboard.tsx # P1 — landing page (/ndk) with live summary cards
-    ClusterDiscovery.tsx    # P1 — AppBar "NDK: N peers" chip
+    AddClusterDialog.tsx    # P1 — AppBar "Add cluster" button (paste/upload kubeconfig -> setCluster)
     TakeSnapshotDialog.tsx  # P2 — manual snapshot
     SnapshotAndReplicate.tsx# P2 — merged snapshot + replicate (hero feature)
     SnapshotList.tsx        # P3 — snapshot list + status badges
