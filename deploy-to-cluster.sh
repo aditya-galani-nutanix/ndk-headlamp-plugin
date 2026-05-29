@@ -18,6 +18,10 @@ echo ">> deploying to pod $POD ($NS)"
 
 kubectl exec -n "$NS" "$POD" -- sh -c "mkdir -p $DEST"
 kubectl exec -i -n "$NS" "$POD" -- sh -c "cat > $DEST/main.js" < dist/main.js
-kubectl exec -i -n "$NS" "$POD" -- sh -c "cat > $DEST/package.json" < dist/package.json
+# Use the FULL project package.json: Headlamp checks
+# devDependencies['@kinvolk/headlamp-plugin'] for compatibility. A stripped
+# package.json (without that field) makes Headlamp disable the plugin as
+# "incompatible".
+kubectl exec -i -n "$NS" "$POD" -- sh -c "cat > $DEST/package.json" < package.json
 
 echo ">> done. Refresh the Headlamp browser tab to load the new build."
