@@ -3,7 +3,7 @@
 A Headlamp plugin that adds **NDK Data Protection** features (snapshot, replicate,
 restore, schedule) to the Headlamp Kubernetes UI. Built for the NDK hackathon.
 
-## Prerequisites (each teammate)
+## Prerequisites
 
 - Node 20 LTS + npm 10 (use `nvm install 20`).
 - The shared kubeconfig (`ndk-clusters.kubeconfig`) with the primary + secondary
