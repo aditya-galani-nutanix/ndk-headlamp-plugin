@@ -9,6 +9,7 @@ import {
   ApplicationClass,
   ApplicationSnapshotClass,
   ApplicationSnapshotReplicationClass,
+  ApplicationSnapshotRestoreClass,
   ReplicationTargetClass,
 } from './ndk-resources';
 
@@ -168,6 +169,37 @@ export function replicateSnapshot({
     spec: {
       applicationSnapshotName,
       replicationTargetName,
+    },
+  });
+}
+
+export interface CreateRestoreArgs {
+  name: string;
+  namespace: string;
+  /** metadata.name of the ApplicationSnapshot to restore. */
+  applicationSnapshotName: string;
+  /** Namespace of the snapshot. Defaults to `namespace` on the backend. */
+  applicationSnapshotNamespace?: string;
+}
+
+/**
+ * POST an ApplicationSnapshotRestore (equivalent to `ndkcli perform restore`).
+ * The controller recreates the application's resources from the snapshot into
+ * this CR's namespace. The spec is immutable, so each restore is a new object.
+ */
+export function createRestore({
+  name,
+  namespace,
+  applicationSnapshotName,
+  applicationSnapshotNamespace,
+}: CreateRestoreArgs): Promise<unknown> {
+  return ApplicationSnapshotRestoreClass.apiEndpoint.post({
+    apiVersion: NDK_GROUP_VERSION,
+    kind: 'ApplicationSnapshotRestore',
+    metadata: { name, namespace },
+    spec: {
+      applicationSnapshotName,
+      ...(applicationSnapshotNamespace ? { applicationSnapshotNamespace } : {}),
     },
   });
 }
