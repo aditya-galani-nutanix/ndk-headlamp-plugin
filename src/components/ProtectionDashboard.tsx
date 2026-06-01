@@ -3,11 +3,16 @@
 import { SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Box, Card, CardContent, Typography } from '@mui/material';
 import {
+  ApplicationClass,
   ApplicationSnapshotClass,
   ApplicationSnapshotReplicationClass,
   JobSchedulerClass,
 } from '../api/ndk-resources';
-import { snapshotState } from '../utils/helpers';
+import { replicationState, snapshotState } from '../utils/helpers';
+import { ApplicationList } from './ApplicationList';
+import { ReplicationList } from './ReplicationList';
+import { SnapshotAndReplicateButton } from './SnapshotAndReplicate';
+import { SnapshotList } from './SnapshotList';
 
 function SummaryCard({ title, value }: { title: string; value: string | number }) {
   return (
@@ -23,6 +28,7 @@ function SummaryCard({ title, value }: { title: string; value: string | number }
 }
 
 export function ProtectionDashboard() {
+  const [applications] = ApplicationClass.useList();
   const [snapshots] = ApplicationSnapshotClass.useList();
   const [replications] = ApplicationSnapshotReplicationClass.useList();
   const [schedules] = JobSchedulerClass.useList();
@@ -31,19 +37,32 @@ export function ProtectionDashboard() {
   const ready = snaps.filter(s => snapshotState((s.jsonData as any)?.status) === 'ready').length;
   const failed = snaps.filter(s => snapshotState((s.jsonData as any)?.status) === 'error').length;
 
+  const repls = replications ?? [];
+  const replicating = repls.filter(
+    r => replicationState((r.jsonData as any)?.status) === 'progressing'
+  ).length;
+  const blocked = repls.filter(
+    r => replicationState((r.jsonData as any)?.status) === 'blocked'
+  ).length;
+
   return (
     <SectionBox title="NDK Data Protection">
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+        <SnapshotAndReplicateButton />
+      </Box>
       <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+        <SummaryCard title="Applications" value={(applications ?? []).length} />
         <SummaryCard title="Snapshots" value={snaps.length} />
         <SummaryCard title="Ready" value={ready} />
         <SummaryCard title="Failed" value={failed} />
-        <SummaryCard title="Replications" value={(replications ?? []).length} />
+        <SummaryCard title="Replications" value={repls.length} />
+        <SummaryCard title="Replicating" value={replicating} />
+        <SummaryCard title="Blocked" value={blocked} />
         <SummaryCard title="Schedules" value={(schedules ?? []).length} />
       </Box>
-      <Typography color="textSecondary" variant="body2">
-        Feature owners: P2 Snapshot &amp; Replicate · P3 Restore + List · P4 Scheduler · P1 Discovery
-        + Dashboard.
-      </Typography>
+      <ApplicationList />
+      <SnapshotList />
+      <ReplicationList />
     </SectionBox>
   );
 }

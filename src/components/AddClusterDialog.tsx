@@ -5,7 +5,6 @@
 // dynamically-added clusters can be removed again via ApiProxy.deleteCluster().
 // Both require the Headlamp server to run with --enable-dynamic-clusters.
 import { ApiProxy, Headlamp, K8s } from '@kinvolk/headlamp-plugin/lib';
-import { useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -22,6 +21,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import { useRef, useState } from 'react';
 
 /** Base64-encode a UTF-8 string (what Headlamp.setCluster expects for kubeconfig). */
 function toBase64(text: string): string {
@@ -86,7 +86,10 @@ export function AddClusterButton() {
 
   // Only dynamically-added clusters (via setCluster) are removable; the cluster
   // that came from the mounted kubeconfig is served by the backend and stays.
-  const clustersConf = (K8s.useClustersConf() || {}) as Record<string, { meta_data?: { source?: string } }>;
+  const clustersConf = (K8s.useClustersConf() || {}) as Record<
+    string,
+    { meta_data?: { source?: string } }
+  >;
   const removableClusters = Object.keys(clustersConf).filter(
     name => clustersConf[name]?.meta_data?.source === 'dynamic_cluster'
   );
@@ -132,7 +135,9 @@ export function AddClusterButton() {
         // stateless clusters from IndexedDB on startup).
         setTimeout(() => window.location.reload(), 900);
       } else {
-        setError('Could not add the cluster. Check the kubeconfig and that Headlamp runs with --enable-dynamic-clusters.');
+        setError(
+          'Could not add the cluster. Check the kubeconfig and that Headlamp runs with --enable-dynamic-clusters.'
+        );
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
