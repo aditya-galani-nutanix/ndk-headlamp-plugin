@@ -54,6 +54,8 @@ export interface ApplicationSnapshotStatus {
   creationTime?: string;
   expirationTime?: string;
   boundApplicationSnapshotContentName?: string;
+  consistencyType?: string;
+  summary?: SnapshotResourceSummary;
   [key: string]: unknown;
 }
 
@@ -128,4 +130,87 @@ export interface JobSchedulerSpec {
   schedule?: string; // cron expression
   suspend?: boolean;
   [key: string]: unknown;
+}
+
+// ---------------------------------------------------------------------------
+// Application (dataservices.nutanix.com/v1alpha1)
+// Field names verified against api/dataservices/v1alpha1/application_types.go.
+// ---------------------------------------------------------------------------
+
+/** Standard metav1.LabelSelector. */
+export interface LabelSelector {
+  matchLabels?: { [key: string]: string };
+  matchExpressions?: unknown[];
+}
+
+export interface GroupKind {
+  group?: string;
+  kind: string;
+}
+
+/** One ORed term of an ApplicationSelector. */
+export interface ResourceLabelSelector {
+  includeResources?: GroupKind[];
+  excludeResources?: GroupKind[];
+  labelSelector?: LabelSelector;
+}
+
+export interface NamespaceSelector {
+  includeNamespaces?: string[];
+}
+
+/**
+ * Selects which cluster resources belong to the Application. If omitted, NDK
+ * protects every resource in the Application's namespace.
+ */
+export interface ApplicationSelector {
+  resourceLabelSelectors?: ResourceLabelSelector[];
+  namespaceSelectors?: NamespaceSelector;
+}
+
+export interface ApplicationSpec {
+  applicationSelector?: ApplicationSelector;
+  /** false for newly created apps (snapshot current cluster state). */
+  useExistingConfig?: boolean;
+  /** true => actively watch + protect the selected resources. */
+  start?: boolean;
+  [key: string]: unknown;
+}
+
+/** A single Kubernetes resource captured by an Application/snapshot. */
+export interface ApplicationResource {
+  name: string;
+  /** Present on skipped artifacts. */
+  reason?: string;
+  /** Present on failed artifacts. */
+  error?: string;
+}
+
+/** map of "[group/]version/Kind" -> resource list. */
+export type ResourcesByGVK = { [gvk: string]: ApplicationResource[] };
+/** map of namespace -> GVK -> resource list. */
+export type ResourcesByNamespace = { [namespace: string]: ResourcesByGVK };
+
+export interface ApplicationResourceSummary {
+  resources?: ResourcesByGVK;
+  resourcesByNamespace?: ResourcesByNamespace;
+  skippedResourcesByNamespace?: ResourcesByNamespace;
+}
+
+export interface ApplicationStatus {
+  summary?: ApplicationResourceSummary;
+  lastUpdatedTime?: string;
+  conditions?: KubeCondition[];
+  error?: { time?: string; message?: string };
+  [key: string]: unknown;
+}
+
+/** Captured / skipped / failed resources recorded on a ready snapshot. */
+export interface SnapshotResourceSummary {
+  snapshotArtifacts?: ResourcesByGVK;
+  snapshotArtifactsByNamespace?: ResourcesByNamespace;
+  skippedSnapshotArtifacts?: ResourcesByGVK;
+  skippedSnapshotArtifactsByNamespace?: ResourcesByNamespace;
+  failedSnapshotArtifacts?: ResourcesByGVK;
+  failedSnapshotArtifactsByNamespace?: ResourcesByNamespace;
 }

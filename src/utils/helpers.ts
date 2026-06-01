@@ -1,11 +1,16 @@
 // Shared formatters and helpers. Owner: P1 (shared).
 
 import type {
+  ApplicationResourceSummary,
   ApplicationSnapshotReplicationStatus,
   ApplicationSnapshotStatus,
+  ApplicationStatus,
   KubeCondition,
   RemoteStatus,
   ReplicationTargetStatus,
+  ResourcesByGVK,
+  ResourcesByNamespace,
+  SnapshotResourceSummary,
 } from '../api/types';
 
 export function formatAge(timestamp?: string): string {
@@ -208,6 +213,29 @@ export function makeSnapshotName(applicationName: string): string {
   return sanitizeRFC1123(`${applicationName}-snap-${ts}`);
 }
 
+// DNS-1035 label: starts with a letter, lowercase alphanumeric + '-', ends with
+// an alphanumeric, max 63 chars. The NDK ApplicationSnapshot webhook rejects
+// names that fail IsDNS1035Label, so we mirror that rule in the form.
+const DNS1035_LABEL = /^[a-z]([-a-z0-9]*[a-z0-9])?$/;
+
+/**
+ * Validate a user-entered snapshot name against the backend's naming rule.
+ * Returns an error string, or undefined when the name is acceptable.
+ */
+export function snapshotNameFormatError(name: string): string | undefined {
+  const n = name.trim();
+  if (!n) {
+    return 'Name is required.';
+  }
+  if (n.length > 63) {
+    return 'Name must be 63 characters or fewer.';
+  }
+  if (!DNS1035_LABEL.test(n)) {
+    return 'Must start with a lowercase letter and use only lowercase letters, numbers and dashes.';
+  }
+  return undefined;
+}
+
 /**
  * Unique replication name for a (snapshot, target) pair. Mirrors the backend
  * CLI's GetRFC1123NameWithRandomSuffix: keep a random suffix and truncate the
@@ -247,3 +275,204 @@ export const EXPIRY_OPTIONS: ExpiryOption[] = [
 ];
 
 export const DEFAULT_EXPIRY = '24h';
+
+// ---------------------------------------------------------------------------
+// Application status (drives the Application list + dashboard)
+// ---------------------------------------------------------------------------
+
+export type ApplicationState = 'active' | 'collecting' | 'error' | 'inactive' | 'pending';
+
+export function applicationState(status?: ApplicationStatus): ApplicationState {
+  if (status?.error) {
+    return 'error';
+  }
+  const active = findCondition(status?.conditions, 'Active');
+  if (active?.status === 'True') {
+    return 'active';
+  }
+  if (active?.status === 'False') {
+    if (active.reason && /collect|initializ/i.test(active.reason)) {
+      return 'collecting';
+    }
+    if (active.reason && /fail/i.test(active.reason)) {
+      return 'error';
+    }
+    return 'inactive';
+  }
+  return 'pending';
+}
+
+/** Human message for an Application's current condition, if any. */
+export function applicationMessage(status?: ApplicationStatus): string | undefined {
+  if (status?.error?.message) {
+    return status.error.message;
+  }
+  const active = findCondition(status?.conditions, 'Active');
+  return active?.message || active?.reason || undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Resource summary helpers (shared by Application + ApplicationSnapshot)
+// ---------------------------------------------------------------------------
+
+export interface ParsedGVK {
+  group: string;
+  version: string;
+  kind: string;
+}
+
+/** Parse a "[group/]version/Kind" key as written by the NDK controllers. */
+export function parseGVK(gvk: string): ParsedGVK {
+  const parts = gvk.split('/');
+  if (parts.length >= 3) {
+    return { group: parts[0], version: parts[1], kind: parts.slice(2).join('/') };
+  }
+  if (parts.length === 2) {
+    return { group: '', version: parts[0], kind: parts[1] };
+  }
+  return { group: '', version: '', kind: gvk };
+}
+
+export interface CapturedResource {
+  name: string;
+  namespace?: string;
+  reason?: string;
+  error?: string;
+}
+
+export interface ResourceKindGroup {
+  kind: string;
+  group: string;
+  resources: CapturedResource[];
+}
+
+function pushInto(
+  byKind: Map<string, ResourceKindGroup>,
+  gvk: string,
+  list: { name: string; reason?: string; error?: string }[] | undefined,
+  namespace?: string
+): void {
+  const { kind, group } = parseGVK(gvk);
+  const key = `${group}/${kind}`;
+  let g = byKind.get(key);
+  if (!g) {
+    g = { kind, group, resources: [] };
+    byKind.set(key, g);
+  }
+  for (const r of list ?? []) {
+    g.resources.push({ name: r.name, namespace, reason: r.reason, error: r.error });
+  }
+}
+
+/**
+ * Collapse the two backend shapes (the namespaced map and the deprecated flat
+ * map) into a single list of resources grouped by Kind, sorted by Kind. Prefers
+ * the namespaced map when present so resources are never double-counted.
+ */
+export function groupResourcesByKind(
+  byNamespace?: ResourcesByNamespace,
+  flat?: ResourcesByGVK
+): ResourceKindGroup[] {
+  const byKind = new Map<string, ResourceKindGroup>();
+  const hasByNs = byNamespace && Object.keys(byNamespace).length > 0;
+  if (hasByNs) {
+    for (const ns of Object.keys(byNamespace as ResourcesByNamespace)) {
+      const gvks = (byNamespace as ResourcesByNamespace)[ns] ?? {};
+      for (const gvk of Object.keys(gvks)) {
+        pushInto(byKind, gvk, gvks[gvk], ns);
+      }
+    }
+  } else if (flat) {
+    for (const gvk of Object.keys(flat)) {
+      pushInto(byKind, gvk, flat[gvk]);
+    }
+  }
+  return [...byKind.values()].sort((a, b) => a.kind.localeCompare(b.kind));
+}
+
+export interface SnapshotArtifacts {
+  captured: ResourceKindGroup[];
+  skipped: ResourceKindGroup[];
+  failed: ResourceKindGroup[];
+  total: number;
+}
+
+/** Group a snapshot's captured / skipped / failed artifacts by Kind. */
+export function groupSnapshotArtifacts(summary?: SnapshotResourceSummary): SnapshotArtifacts {
+  const captured = groupResourcesByKind(
+    summary?.snapshotArtifactsByNamespace,
+    summary?.snapshotArtifacts
+  );
+  const skipped = groupResourcesByKind(
+    summary?.skippedSnapshotArtifactsByNamespace,
+    summary?.skippedSnapshotArtifacts
+  );
+  const failed = groupResourcesByKind(
+    summary?.failedSnapshotArtifactsByNamespace,
+    summary?.failedSnapshotArtifacts
+  );
+  const total = captured.reduce((n, g) => n + g.resources.length, 0);
+  return { captured, skipped, failed, total };
+}
+
+/** Total number of resources an Application currently protects. */
+export function countApplicationResources(summary?: ApplicationResourceSummary): number {
+  return groupResourcesByKind(summary?.resourcesByNamespace, summary?.resources).reduce(
+    (n, g) => n + g.resources.length,
+    0
+  );
+}
+
+/** Map a Kubernetes Kind to an mdi icon for the resource cards. */
+export function kindIcon(kind: string): string {
+  const k = kind.toLowerCase();
+  if (k.includes('persistentvolumeclaim') || k.includes('persistentvolume')) {
+    return 'mdi:database-outline';
+  }
+  if (k.includes('statefulset')) {
+    return 'mdi:database-cog-outline';
+  }
+  if (k.includes('deployment')) {
+    return 'mdi:rocket-launch-outline';
+  }
+  if (k.includes('daemonset')) {
+    return 'mdi:server-network-outline';
+  }
+  if (k.includes('replicaset')) {
+    return 'mdi:layers-outline';
+  }
+  if (k === 'pod') {
+    return 'mdi:cube-outline';
+  }
+  if (k.includes('configmap')) {
+    return 'mdi:file-cog-outline';
+  }
+  if (k.includes('secret')) {
+    return 'mdi:key-outline';
+  }
+  if (k.includes('serviceaccount')) {
+    return 'mdi:account-outline';
+  }
+  if (k.includes('service')) {
+    return 'mdi:lan';
+  }
+  if (k.includes('ingress')) {
+    return 'mdi:directions-fork';
+  }
+  if (k.includes('role') || k.includes('binding')) {
+    return 'mdi:shield-account-outline';
+  }
+  if (k.includes('job')) {
+    return 'mdi:briefcase-outline';
+  }
+  return 'mdi:kubernetes';
+}
+
+// ---------------------------------------------------------------------------
+// Application-name helper for the create form.
+// ---------------------------------------------------------------------------
+
+/** Suggested default Application name for a namespace, e.g. "mongo-app". */
+export function makeApplicationName(namespace: string): string {
+  return sanitizeRFC1123(`${namespace || 'ndk'}-app`);
+}

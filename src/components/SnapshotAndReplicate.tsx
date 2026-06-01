@@ -58,6 +58,7 @@ import {
   type ReplicationState,
   replicationState,
   snapshotErrorMessage,
+  snapshotNameFormatError,
   snapshotState,
 } from '../utils/helpers';
 
@@ -220,6 +221,9 @@ function SnapshotReplicateDialog({ application, namespace, onClose }: DialogProp
 
   const [apps] = ApplicationClass.useList();
   const [remotesList] = RemoteClass.useList();
+  // Existing snapshots in the chosen namespace, used to reject a duplicate name
+  // before we POST (K8s would reject it as AlreadyExists anyway).
+  const [nsSnapshots] = ApplicationSnapshotClass.useList(ns ? { namespace: ns } : {});
 
   const appOptions = useMemo(
     () =>
@@ -262,10 +266,23 @@ function SnapshotReplicateDialog({ application, namespace, onClose }: DialogProp
     setRemotes([]);
   }
 
+  const nameFormatError = snapshotNameFormatError(snapshotName);
+  const duplicateName =
+    !nameFormatError &&
+    Boolean(ns) &&
+    (nsSnapshots ?? []).some(
+      s => s.metadata.name === snapshotName.trim() && (s.metadata.namespace ?? '') === ns
+    );
+  const nameError =
+    nameFormatError ??
+    (duplicateName
+      ? `A snapshot named “${snapshotName.trim()}” already exists in “${ns}”. Choose a different name.`
+      : undefined);
+
   const formValid =
     Boolean(applicationName) &&
     Boolean(ns) &&
-    Boolean(snapshotName.trim()) &&
+    !nameError &&
     (!alsoReplicate || remotes.length > 0);
 
   async function handleStart() {
@@ -408,7 +425,10 @@ function SnapshotReplicateDialog({ application, namespace, onClose }: DialogProp
               value={snapshotName}
               onChange={e => setSnapshotName(e.target.value)}
               fullWidth
-              helperText="Lowercase letters, numbers and dashes (RFC 1123)."
+              error={Boolean(nameError)}
+              helperText={
+                nameError ?? 'Must start with a letter; lowercase letters, numbers and dashes.'
+              }
             />
 
             <FormControl fullWidth>

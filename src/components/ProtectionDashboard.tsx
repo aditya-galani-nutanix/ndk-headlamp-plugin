@@ -3,11 +3,13 @@
 import { SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Box, Card, CardContent, Typography } from '@mui/material';
 import {
+  ApplicationClass,
   ApplicationSnapshotClass,
   ApplicationSnapshotReplicationClass,
   JobSchedulerClass,
 } from '../api/ndk-resources';
 import { replicationState, snapshotState } from '../utils/helpers';
+import { ApplicationList } from './ApplicationList';
 import { ReplicationList } from './ReplicationList';
 import { SnapshotAndReplicateButton } from './SnapshotAndReplicate';
 import { SnapshotList } from './SnapshotList';
@@ -26,6 +28,7 @@ function SummaryCard({ title, value }: { title: string; value: string | number }
 }
 
 export function ProtectionDashboard() {
+  const [applications] = ApplicationClass.useList();
   const [snapshots] = ApplicationSnapshotClass.useList();
   const [replications] = ApplicationSnapshotReplicationClass.useList();
   const [schedules] = JobSchedulerClass.useList();
@@ -48,6 +51,7 @@ export function ProtectionDashboard() {
         <SnapshotAndReplicateButton />
       </Box>
       <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+        <SummaryCard title="Applications" value={(applications ?? []).length} />
         <SummaryCard title="Snapshots" value={snaps.length} />
         <SummaryCard title="Ready" value={ready} />
         <SummaryCard title="Failed" value={failed} />
@@ -56,6 +60,7 @@ export function ProtectionDashboard() {
         <SummaryCard title="Blocked" value={blocked} />
         <SummaryCard title="Schedules" value={(schedules ?? []).length} />
       </Box>
+      <ApplicationList />
       <SnapshotList />
       <ReplicationList />
     </SectionBox>

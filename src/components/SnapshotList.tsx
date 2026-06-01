@@ -5,7 +5,7 @@
 // they are ready, and how many replications each one has.
 import { Icon } from '@iconify/react';
 import { SectionBox, SimpleTable } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { Button, Chip, Tooltip } from '@mui/material';
+import { Button, Chip, IconButton, Link, Stack, Tooltip } from '@mui/material';
 import { useState } from 'react';
 import {
   ApplicationSnapshotClass,
@@ -13,7 +13,9 @@ import {
 } from '../api/ndk-resources';
 import type { ApplicationSnapshotStatus } from '../api/types';
 import { formatAge, replicationState, snapshotErrorMessage, snapshotState } from '../utils/helpers';
+import { DeleteSnapshotDialog } from './DeleteSnapshotDialog';
 import { ReplicateSnapshotDialog } from './ReplicateSnapshotDialog';
+import { SnapshotDetailsDialog } from './SnapshotDetailsDialog';
 
 export interface SnapshotListProps {
   /** Scope the list to a single namespace. */
@@ -46,6 +48,12 @@ export function SnapshotList({ namespace, application, title = 'Snapshots' }: Sn
   const [replicateFor, setReplicateFor] = useState<{ name: string; namespace: string } | null>(
     null
   );
+  const [detailsFor, setDetailsFor] = useState<any | null>(null);
+  const [deleteFor, setDeleteFor] = useState<{
+    name: string;
+    namespace: string;
+    replicationNames: string[];
+  } | null>(null);
 
   const data =
     snapshots === null
@@ -54,10 +62,14 @@ export function SnapshotList({ namespace, application, title = 'Snapshots' }: Sn
           s => !application || s.jsonData?.spec?.source?.applicationRef?.name === application
         );
 
-  function replicationSummary(snapshotName: string): string {
-    const list = (replications ?? []).filter(
+  function replicationsFor(snapshotName: string) {
+    return (replications ?? []).filter(
       r => r.jsonData?.spec?.applicationSnapshotName === snapshotName
     );
+  }
+
+  function replicationSummary(snapshotName: string): string {
+    const list = replicationsFor(snapshotName);
     if (list.length === 0) {
       return '—';
     }
@@ -73,7 +85,21 @@ export function SnapshotList({ namespace, application, title = 'Snapshots' }: Sn
             application ? 'No snapshots for this application yet.' : 'No snapshots yet.'
           }
           columns={[
-            { label: 'Name', getter: (s: any) => s.metadata.name, sort: true },
+            {
+              label: 'Name',
+              getter: (s: any) => (
+                <Link
+                  component="button"
+                  type="button"
+                  underline="hover"
+                  sx={{ textAlign: 'left' }}
+                  onClick={() => setDetailsFor(s.jsonData)}
+                >
+                  {s.metadata.name}
+                </Link>
+              ),
+              sort: (a: any, b: any) => String(a.metadata.name).localeCompare(String(b.metadata.name)),
+            },
             { label: 'Namespace', getter: (s: any) => s.metadata.namespace ?? '—', sort: true },
             {
               label: 'Application',
@@ -103,31 +129,47 @@ export function SnapshotList({ namespace, application, title = 'Snapshots' }: Sn
               label: '',
               getter: (s: any) => {
                 const ready = snapshotState(s.jsonData?.status) === 'ready';
+                const ns = s.metadata.namespace ?? '';
                 return (
-                  <Tooltip
-                    title={
-                      ready
-                        ? 'Replicate this snapshot to another cluster'
-                        : 'Available once the snapshot is ready'
-                    }
-                  >
-                    <span>
-                      <Button
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Tooltip
+                      title={
+                        ready
+                          ? 'Replicate this snapshot to another cluster'
+                          : 'Available once the snapshot is ready'
+                      }
+                    >
+                      <span>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={!ready}
+                          startIcon={<Icon icon="mdi:content-copy" />}
+                          onClick={() => setReplicateFor({ name: s.metadata.name, namespace: ns })}
+                        >
+                          Replicate
+                        </Button>
+                      </span>
+                    </Tooltip>
+                    <Tooltip title="Delete snapshot (and its replications)">
+                      <IconButton
                         size="small"
-                        variant="outlined"
-                        disabled={!ready}
-                        startIcon={<Icon icon="mdi:content-copy" />}
+                        color="error"
+                        aria-label="Delete snapshot"
                         onClick={() =>
-                          setReplicateFor({
+                          setDeleteFor({
                             name: s.metadata.name,
-                            namespace: s.metadata.namespace ?? '',
+                            namespace: ns,
+                            replicationNames: replicationsFor(s.metadata.name).map(
+                              r => r.metadata.name
+                            ),
                           })
                         }
                       >
-                        Replicate
-                      </Button>
-                    </span>
-                  </Tooltip>
+                        <Icon icon="mdi:delete" width={20} />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
                 );
               },
             },
@@ -141,6 +183,17 @@ export function SnapshotList({ namespace, application, title = 'Snapshots' }: Sn
           snapshotName={replicateFor.name}
           namespace={replicateFor.namespace}
           onClose={() => setReplicateFor(null)}
+        />
+      )}
+      {detailsFor && (
+        <SnapshotDetailsDialog snapshot={detailsFor} onClose={() => setDetailsFor(null)} />
+      )}
+      {deleteFor && (
+        <DeleteSnapshotDialog
+          snapshotName={deleteFor.name}
+          namespace={deleteFor.namespace}
+          replicationNames={deleteFor.replicationNames}
+          onClose={() => setDeleteFor(null)}
         />
       )}
     </>
