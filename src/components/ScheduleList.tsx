@@ -17,6 +17,10 @@ import {
   DialogTitle,
   IconButton,
   LinearProgress,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
   Stack,
   Tooltip,
   Typography,
@@ -176,30 +180,13 @@ export function ScheduleList({ namespace, application, title = 'Schedules' }: Sc
                 new Date(b.creationTimestamp ?? 0).getTime(),
             },
             {
-              label: '',
+              label: 'Actions',
+              cellProps: { align: 'right' },
               getter: (r: ScheduleRow) => (
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Tooltip title="Stop taking scheduled snapshots (keeps the schedule definition)">
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      startIcon={<Icon icon="mdi:pause" />}
-                      onClick={() => setDisableFor(r)}
-                    >
-                      Disable
-                    </Button>
-                  </Tooltip>
-                  <Tooltip title="Delete the schedule (schedule, plan and binding)">
-                    <IconButton
-                      size="small"
-                      color="error"
-                      aria-label="Delete schedule"
-                      onClick={() => setDeleteFor(r)}
-                    >
-                      <Icon icon="mdi:delete" width={20} />
-                    </IconButton>
-                  </Tooltip>
-                </Stack>
+                <RowActionsMenu
+                  onDisable={() => setDisableFor(r)}
+                  onDelete={() => setDeleteFor(r)}
+                />
               ),
             },
           ]}
@@ -208,6 +195,63 @@ export function ScheduleList({ namespace, application, title = 'Schedules' }: Sc
       </SectionBox>
       {disableFor && <DisableScheduleDialog row={disableFor} onClose={() => setDisableFor(null)} />}
       {deleteFor && <DeleteScheduleDialog row={deleteFor} onClose={() => setDeleteFor(null)} />}
+    </>
+  );
+}
+
+/** Kebab menu of per-row actions (Disable / Delete). */
+function RowActionsMenu({
+  onDisable,
+  onDelete,
+}: {
+  onDisable: () => void;
+  onDelete: () => void;
+}) {
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const open = Boolean(anchorEl);
+
+  const close = () => setAnchorEl(null);
+  const handle = (fn: () => void) => () => {
+    close();
+    fn();
+  };
+
+  return (
+    <>
+      <Tooltip title="Schedule actions">
+        <IconButton
+          size="small"
+          aria-label="Schedule actions"
+          aria-haspopup="true"
+          aria-expanded={open ? 'true' : undefined}
+          onClick={e => setAnchorEl(e.currentTarget)}
+        >
+          <Icon icon="mdi:dots-vertical" width={20} />
+        </IconButton>
+      </Tooltip>
+      <Menu
+        anchorEl={anchorEl}
+        open={open}
+        onClose={close}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <MenuItem onClick={handle(onDisable)}>
+          <ListItemIcon>
+            <Icon icon="mdi:pause" width={20} />
+          </ListItemIcon>
+          <ListItemText
+            primary="Disable"
+            secondary="Stop scheduled snapshots, keep the schedule"
+          />
+        </MenuItem>
+        <MenuItem onClick={handle(onDelete)} sx={{ color: 'error.main' }}>
+          <ListItemIcon sx={{ color: 'error.main' }}>
+            <Icon icon="mdi:delete" width={20} />
+          </ListItemIcon>
+          <ListItemText primary="Delete" secondary="Remove schedule, plan and binding" />
+        </MenuItem>
+      </Menu>
     </>
   );
 }

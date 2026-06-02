@@ -592,6 +592,14 @@ export function scheduleFormError(v: ScheduleFormValues): string | undefined {
       if (v.cron.trim() === '' || parts.length !== 5) {
         return 'Cron must have 5 fields: minute hour day month day-of-week.';
       }
+      // Enforce the same >= 60-minute floor as the interval recurrence (and the
+      // backend webhook). A schedule runs more than once per hour exactly when
+      // the minute field selects more than one minute — i.e. it is anything
+      // other than a single fixed value (so "*", "*/15", "0-5", "0,30" are all
+      // sub-hourly). A single minute value fires at most once per hour.
+      if (!/^[0-5]?\d$/.test(parts[0])) {
+        return `Cron must run at most once per hour (effective interval ≥ ${MIN_SCHEDULE_INTERVAL_MINUTES} min). Use a single minute value, e.g. "0 2 * * *".`;
+      }
       return undefined;
     }
     default:
