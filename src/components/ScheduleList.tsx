@@ -1,10 +1,9 @@
-// Owner: P3 — Schedule list with execution history + disable/delete.
+// Owner: P3 — Schedule list with execution history + delete.
 //
 // A "schedule" is the AppProtectionPlan (binds an Application to a ProtectionPlan)
 // joined to its ProtectionPlan (retention + replication recipe) and the
 // JobScheduler that ProtectionPlan references (the recurrence + next/last run).
-// Disable removes only the AppProtectionPlan binding; Delete removes the whole
-// chain (AppProtectionPlan + ProtectionPlan + JobScheduler).
+// Delete removes the whole chain (AppProtectionPlan + ProtectionPlan + JobScheduler).
 import { Icon } from '@iconify/react';
 import { SectionBox, SimpleTable } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import {
@@ -17,10 +16,6 @@ import {
   DialogTitle,
   IconButton,
   LinearProgress,
-  ListItemIcon,
-  ListItemText,
-  Menu,
-  MenuItem,
   Stack,
   Tooltip,
   Typography,
@@ -31,7 +26,7 @@ import {
   JobSchedulerClass,
   ProtectionPlanClass,
 } from '../api/ndk-resources';
-import { deleteScheduleCascade, disableSchedule } from '../api/schedule-actions';
+import { deleteScheduleCascade } from '../api/schedule-actions';
 import type { JobSchedulerSpec, ProtectionPlanSpec } from '../api/types';
 import {
   describeSchedule,
@@ -92,7 +87,6 @@ export function ScheduleList({ namespace, application, title = 'Schedules' }: Sc
   const [protectionPlans] = ProtectionPlanClass.useList(namespace ? { namespace } : {});
   const [jobSchedulers] = JobSchedulerClass.useList(namespace ? { namespace } : {});
 
-  const [disableFor, setDisableFor] = useState<ScheduleRow | null>(null);
   const [deleteFor, setDeleteFor] = useState<ScheduleRow | null>(null);
 
   function planByName(ns: string, name?: string) {
@@ -183,75 +177,23 @@ export function ScheduleList({ namespace, application, title = 'Schedules' }: Sc
               label: 'Actions',
               cellProps: { align: 'right' },
               getter: (r: ScheduleRow) => (
-                <RowActionsMenu
-                  onDisable={() => setDisableFor(r)}
-                  onDelete={() => setDeleteFor(r)}
-                />
+                <Tooltip title="Delete schedule (schedule, plan and binding)">
+                  <IconButton
+                    size="small"
+                    color="error"
+                    aria-label="Delete schedule"
+                    onClick={() => setDeleteFor(r)}
+                  >
+                    <Icon icon="mdi:delete" width={20} />
+                  </IconButton>
+                </Tooltip>
               ),
             },
           ]}
           data={rows}
         />
       </SectionBox>
-      {disableFor && <DisableScheduleDialog row={disableFor} onClose={() => setDisableFor(null)} />}
       {deleteFor && <DeleteScheduleDialog row={deleteFor} onClose={() => setDeleteFor(null)} />}
-    </>
-  );
-}
-
-/** Kebab menu of per-row actions (Disable / Delete). */
-function RowActionsMenu({
-  onDisable,
-  onDelete,
-}: {
-  onDisable: () => void;
-  onDelete: () => void;
-}) {
-  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
-  const open = Boolean(anchorEl);
-
-  const close = () => setAnchorEl(null);
-  const handle = (fn: () => void) => () => {
-    close();
-    fn();
-  };
-
-  return (
-    <>
-      <Tooltip title="Schedule actions">
-        <IconButton
-          size="small"
-          aria-label="Schedule actions"
-          aria-haspopup="true"
-          aria-expanded={open ? 'true' : undefined}
-          onClick={e => setAnchorEl(e.currentTarget)}
-        >
-          <Icon icon="mdi:dots-vertical" width={20} />
-        </IconButton>
-      </Tooltip>
-      <Menu
-        anchorEl={anchorEl}
-        open={open}
-        onClose={close}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-      >
-        <MenuItem onClick={handle(onDisable)}>
-          <ListItemIcon>
-            <Icon icon="mdi:pause" width={20} />
-          </ListItemIcon>
-          <ListItemText
-            primary="Disable"
-            secondary="Stop scheduled snapshots, keep the schedule"
-          />
-        </MenuItem>
-        <MenuItem onClick={handle(onDelete)} sx={{ color: 'error.main' }}>
-          <ListItemIcon sx={{ color: 'error.main' }}>
-            <Icon icon="mdi:delete" width={20} />
-          </ListItemIcon>
-          <ListItemText primary="Delete" secondary="Remove schedule, plan and binding" />
-        </MenuItem>
-      </Menu>
     </>
   );
 }
@@ -259,69 +201,6 @@ function RowActionsMenu({
 interface RowDialogProps {
   row: ScheduleRow;
   onClose: () => void;
-}
-
-function DisableScheduleDialog({ row, onClose }: RowDialogProps) {
-  const [phase, setPhase] = useState<'idle' | 'working' | 'done'>('idle');
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleDisable() {
-    setPhase('working');
-    setError(null);
-    try {
-      await disableSchedule({ namespace: row.namespace, appProtectionPlanName: row.appPlanName });
-      setPhase('done');
-    } catch (e) {
-      setError(errMessage(e));
-      setPhase('idle');
-    }
-  }
-
-  return (
-    <Dialog open onClose={phase === 'working' ? undefined : onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Disable schedule</DialogTitle>
-      <DialogContent dividers>
-        {phase === 'done' ? (
-          <Alert severity="success">
-            Scheduled snapshots for “{row.applicationName}” are stopped. The schedule and protection
-            plan are kept — recreate a schedule to resume.
-          </Alert>
-        ) : (
-          <Stack spacing={2}>
-            <Typography variant="body2">
-              This stops taking new scheduled snapshots for “{row.applicationName}” by removing its
-              protection binding. Existing snapshots are not deleted. The recurrence definition and
-              protection plan are kept.
-            </Typography>
-            {error && <Alert severity="error">{error}</Alert>}
-            {phase === 'working' && <LinearProgress />}
-          </Stack>
-        )}
-      </DialogContent>
-      <DialogActions>
-        {phase === 'done' ? (
-          <Button variant="contained" onClick={onClose}>
-            Done
-          </Button>
-        ) : (
-          <>
-            <Button onClick={onClose} disabled={phase === 'working'}>
-              Cancel
-            </Button>
-            <Button
-              variant="contained"
-              color="warning"
-              onClick={handleDisable}
-              disabled={phase === 'working'}
-              startIcon={<Icon icon="mdi:pause" />}
-            >
-              Disable
-            </Button>
-          </>
-        )}
-      </DialogActions>
-    </Dialog>
-  );
 }
 
 function DeleteScheduleDialog({ row, onClose }: RowDialogProps) {
