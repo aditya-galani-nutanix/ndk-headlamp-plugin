@@ -11,6 +11,8 @@ import {
 import { replicationState, snapshotState } from '../utils/helpers';
 import { ApplicationList } from './ApplicationList';
 import { ReplicationList } from './ReplicationList';
+import { ScheduleButton } from './ScheduleForm';
+import { ScheduleList } from './ScheduleList';
 import { SnapshotAndReplicateButton } from './SnapshotAndReplicate';
 import { SnapshotList } from './SnapshotList';
 
@@ -47,7 +49,8 @@ export function ProtectionDashboard() {
 
   return (
     <SectionBox title="NDK Data Protection">
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mb: 2 }}>
+        <ScheduleButton variant="outlined" />
         <SnapshotAndReplicateButton />
       </Box>
       <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
@@ -63,6 +66,7 @@ export function ProtectionDashboard() {
       <ApplicationList />
       <SnapshotList />
       <ReplicationList />
+      <ScheduleList />
     </SectionBox>
   );
 }

@@ -98,7 +98,8 @@ export function SnapshotList({ namespace, application, title = 'Snapshots' }: Sn
                   {s.metadata.name}
                 </Link>
               ),
-              sort: (a: any, b: any) => String(a.metadata.name).localeCompare(String(b.metadata.name)),
+              sort: (a: any, b: any) =>
+                String(a.metadata.name).localeCompare(String(b.metadata.name)),
             },
             { label: 'Namespace', getter: (s: any) => s.metadata.namespace ?? '—', sort: true },
             {
@@ -106,10 +107,10 @@ export function SnapshotList({ namespace, application, title = 'Snapshots' }: Sn
               getter: (s: any) => s.jsonData?.spec?.source?.applicationRef?.name ?? '—',
               sort: true,
             },
-          {
-            label: 'Status',
-            getter: (s: any) => <SnapshotStatusChip status={s.jsonData?.status} />,
-          },
+            {
+              label: 'Status',
+              getter: (s: any) => <SnapshotStatusChip status={s.jsonData?.status} />,
+            },
             {
               label: 'Replications',
               getter: (s: any) => replicationSummary(s.metadata.name),

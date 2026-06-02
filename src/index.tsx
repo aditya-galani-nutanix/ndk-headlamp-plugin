@@ -15,6 +15,8 @@ import { Box, Typography } from '@mui/material';
 import { AddClusterButton } from './components/AddClusterDialog';
 import { ProtectionDashboard } from './components/ProtectionDashboard';
 import { ReplicationList } from './components/ReplicationList';
+import { ScheduleButton } from './components/ScheduleForm';
+import { ScheduleList } from './components/ScheduleList';
 import { SnapshotAndReplicateButton } from './components/SnapshotAndReplicate';
 import { SnapshotList } from './components/SnapshotList';
 
@@ -32,6 +34,28 @@ registerRoute({
   name: 'ndk',
   exact: true,
   component: () => <ProtectionDashboard />,
+});
+
+registerSidebarEntry({
+  parent: 'ndk',
+  name: 'ndk-schedules',
+  label: 'Schedules',
+  url: '/ndk/schedules',
+});
+
+registerRoute({
+  path: '/ndk/schedules',
+  sidebar: 'ndk-schedules',
+  name: 'ndk-schedules',
+  exact: true,
+  component: () => (
+    <SectionBox title="Snapshot Schedules">
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+        <ScheduleButton />
+      </Box>
+      <ScheduleList />
+    </SectionBox>
+  ),
 });
 
 registerAppBarAction(<AddClusterButton />);
@@ -52,8 +76,14 @@ registerDetailsViewSection(({ resource }: DetailsViewSectionProps) => {
               application={resource.getName()}
               namespace={resource.getNamespace()}
             />
+            <ScheduleButton
+              application={resource.getName()}
+              namespace={resource.getNamespace()}
+              variant="outlined"
+            />
             <Typography color="textSecondary" variant="body2">
-              Take a manual snapshot of this application and replicate it to other clusters.
+              Take a manual snapshot of this application, replicate it, or schedule recurring
+              snapshots.
             </Typography>
           </Box>
         </SectionBox>
@@ -63,6 +93,11 @@ registerDetailsViewSection(({ resource }: DetailsViewSectionProps) => {
           title="Application snapshots"
         />
         <ReplicationList namespace={resource.getNamespace()} title="Replication tasks" />
+        <ScheduleList
+          namespace={resource.getNamespace()}
+          application={resource.getName()}
+          title="Snapshot schedules"
+        />
       </>
     );
   }

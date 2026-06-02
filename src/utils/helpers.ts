@@ -5,6 +5,7 @@ import type {
   ApplicationSnapshotReplicationStatus,
   ApplicationSnapshotStatus,
   ApplicationStatus,
+  JobSchedulerSpec,
   KubeCondition,
   RemoteStatus,
   ReplicationTargetStatus,
@@ -475,4 +476,173 @@ export function kindIcon(kind: string): string {
 /** Suggested default Application name for a namespace, e.g. "mongo-app". */
 export function makeApplicationName(namespace: string): string {
   return sanitizeRFC1123(`${namespace || 'ndk'}-app`);
+}
+
+// ---------------------------------------------------------------------------
+// Job scheduler (recurring snapshots) — names, options, formatting, validation.
+// Mirrors the rules enforced by the k8s-job-scheduler webhook and the
+// `ndkcli create protectionplan` naming (GetRFC1123NameWithRandomSuffix).
+// ---------------------------------------------------------------------------
+
+/** "js-<app>-<rand>" — the JobScheduler name for an application's schedule. */
+export function makeJobSchedulerName(applicationName: string): string {
+  const suffix = `-${randomSuffix()}`;
+  const base = sanitizeRFC1123(`js-${applicationName}`, 63 - suffix.length);
+  return sanitizeRFC1123(`${base}${suffix}`);
+}
+
+/** "pplan-<app>-<rand>" — the ProtectionPlan name for an application's schedule. */
+export function makeProtectionPlanName(applicationName: string): string {
+  const suffix = `-${randomSuffix()}`;
+  const base = sanitizeRFC1123(`pplan-${applicationName}`, 63 - suffix.length);
+  return sanitizeRFC1123(`${base}${suffix}`);
+}
+
+/** "appplan-<app>-<rand>" — the AppProtectionPlan name binding an app to a plan. */
+export function makeAppProtectionPlanName(applicationName: string): string {
+  const suffix = `-${randomSuffix()}`;
+  const base = sanitizeRFC1123(`appplan-${applicationName}`, 63 - suffix.length);
+  return sanitizeRFC1123(`${base}${suffix}`);
+}
+
+export type RecurrenceType = 'interval' | 'daily' | 'weekly' | 'monthly' | 'cron';
+
+export interface RecurrenceOption {
+  label: string;
+  value: RecurrenceType;
+}
+
+export const RECURRENCE_OPTIONS: RecurrenceOption[] = [
+  { label: 'Interval (every N minutes)', value: 'interval' },
+  { label: 'Daily', value: 'daily' },
+  { label: 'Weekly', value: 'weekly' },
+  { label: 'Monthly', value: 'monthly' },
+  { label: 'Cron expression', value: 'cron' },
+];
+
+/** Minimum interval (minutes) between runs, enforced by the backend webhook. */
+export const MIN_SCHEDULE_INTERVAL_MINUTES = 60;
+export const DEFAULT_RETENTION_COUNT = 10;
+
+/** Raw form inputs for the schedule, before building the JobScheduler spec. */
+export interface ScheduleFormValues {
+  type: RecurrenceType;
+  /** interval: minutes. */
+  intervalMinutes: string;
+  /** daily/weekly/monthly: "HH:MM". */
+  time: string;
+  /** weekly: days, e.g. "MON,WED,FRI" or "1-5". */
+  weeklyDays: string;
+  /** monthly: dates, e.g. "1,15" or "2-7". */
+  monthlyDates: string;
+  /** cron: 5-field cron expression. */
+  cron: string;
+}
+
+const TIME_24H = /^([01]?\d|2[0-3]):[0-5]\d$/;
+
+/** Build a JobSchedulerSpec from the form values (one recurrence member set). */
+export function buildScheduleSpec(v: ScheduleFormValues): JobSchedulerSpec {
+  switch (v.type) {
+    case 'interval':
+      return { interval: { minutes: Number(v.intervalMinutes) } };
+    case 'daily':
+      return { daily: { time: v.time.trim() } };
+    case 'weekly':
+      return { weekly: { days: v.weeklyDays.trim(), time: v.time.trim() } };
+    case 'monthly':
+      return { monthly: { dates: v.monthlyDates.trim(), time: v.time.trim() } };
+    case 'cron':
+      return { cronSchedule: v.cron.trim() };
+    default:
+      return {};
+  }
+}
+
+/**
+ * Validate the schedule form against the backend's rules. Returns an error
+ * string, or undefined when the values are acceptable.
+ */
+export function scheduleFormError(v: ScheduleFormValues): string | undefined {
+  switch (v.type) {
+    case 'interval': {
+      const n = Number(v.intervalMinutes);
+      if (!Number.isInteger(n)) {
+        return 'Interval must be a whole number of minutes.';
+      }
+      if (n < MIN_SCHEDULE_INTERVAL_MINUTES) {
+        return `Interval must be at least ${MIN_SCHEDULE_INTERVAL_MINUTES} minutes.`;
+      }
+      return undefined;
+    }
+    case 'daily':
+      return TIME_24H.test(v.time.trim()) ? undefined : 'Time must be in HH:MM 24-hour format.';
+    case 'weekly':
+      if (!v.weeklyDays.trim()) {
+        return 'Specify one or more days, e.g. "MON,WED,FRI" or "1-5".';
+      }
+      return TIME_24H.test(v.time.trim()) ? undefined : 'Time must be in HH:MM 24-hour format.';
+    case 'monthly':
+      if (!v.monthlyDates.trim()) {
+        return 'Specify one or more dates, e.g. "1,15" or "2-7".';
+      }
+      return TIME_24H.test(v.time.trim()) ? undefined : 'Time must be in HH:MM 24-hour format.';
+    case 'cron': {
+      const parts = v.cron.trim().split(/\s+/);
+      if (v.cron.trim() === '' || parts.length !== 5) {
+        return 'Cron must have 5 fields: minute hour day month day-of-week.';
+      }
+      return undefined;
+    }
+    default:
+      return 'Select a recurrence type.';
+  }
+}
+
+/** Human-readable description of a JobScheduler spec, e.g. "Daily at 02:30". */
+export function describeSchedule(spec?: JobSchedulerSpec): string {
+  if (!spec) {
+    return '—';
+  }
+  if (spec.interval) {
+    return `Every ${spec.interval.minutes} min`;
+  }
+  if (spec.daily) {
+    return `Daily at ${spec.daily.time}`;
+  }
+  if (spec.weekly) {
+    return `Weekly on ${spec.weekly.days} at ${spec.weekly.time}`;
+  }
+  if (spec.monthly) {
+    return `Monthly on ${spec.monthly.dates} at ${spec.monthly.time}`;
+  }
+  if (spec.cronSchedule) {
+    return `Cron: ${spec.cronSchedule}`;
+  }
+  return '—';
+}
+
+/** Format an RFC3339 timestamp as a short local date-time, or "—" when absent. */
+export function formatTimestamp(timestamp?: string): string {
+  if (!timestamp) {
+    return '—';
+  }
+  const d = new Date(timestamp);
+  if (Number.isNaN(d.getTime())) {
+    return '—';
+  }
+  return d.toLocaleString();
+}
+
+export type ProtectionPlanState = 'available' | 'degraded' | 'pending';
+
+/** Map a ProtectionPlan / AppProtectionPlan condition list to a simple state. */
+export function protectionPlanState(conditions?: KubeCondition[]): ProtectionPlanState {
+  if (findCondition(conditions, 'Degraded')?.status === 'True') {
+    return 'degraded';
+  }
+  if (findCondition(conditions, 'Available')?.status === 'True') {
+    return 'available';
+  }
+  return 'pending';
 }

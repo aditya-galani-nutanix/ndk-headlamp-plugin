@@ -72,3 +72,23 @@ export const JobSchedulerClass = makeCustomResourceClass({
   singularName: 'jobscheduler',
   isNamespaced: true,
 });
+
+// ProtectionPlan references a JobScheduler (spec.scheduleName) and defines the
+// retention + replication recipe for the snapshots created on that schedule.
+export const ProtectionPlanClass = makeCustomResourceClass({
+  apiInfo: [{ group: NDK_GROUP, version: NDK_VERSION }],
+  kind: 'ProtectionPlan',
+  pluralName: 'protectionplans',
+  singularName: 'protectionplan',
+  isNamespaced: true,
+});
+
+// AppProtectionPlan binds an Application to one or more ProtectionPlans, which is
+// what actually drives recurring snapshots for that application.
+export const AppProtectionPlanClass = makeCustomResourceClass({
+  apiInfo: [{ group: NDK_GROUP, version: NDK_VERSION }],
+  kind: 'AppProtectionPlan',
+  pluralName: 'appprotectionplans',
+  singularName: 'appprotectionplan',
+  isNamespaced: true,
+});
