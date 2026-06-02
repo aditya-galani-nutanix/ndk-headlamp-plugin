@@ -10,11 +10,21 @@ import { useState } from 'react';
 import {
   ApplicationSnapshotClass,
   ApplicationSnapshotReplicationClass,
+  ApplicationSnapshotRestoreClass,
 } from '../api/ndk-resources';
 import type { ApplicationSnapshotStatus } from '../api/types';
-import { formatAge, replicationState, snapshotErrorMessage, snapshotState } from '../utils/helpers';
+import {
+  aggregateRestoreState,
+  formatAge,
+  isRestorableSnapshot,
+  replicationsForSnapshot,
+  replicationState,
+  snapshotErrorMessage,
+  snapshotState,
+} from '../utils/helpers';
 import { DeleteSnapshotDialog } from './DeleteSnapshotDialog';
 import { ReplicateSnapshotDialog } from './ReplicateSnapshotDialog';
+import { RestoreButton } from './RestoreButton';
 import { SnapshotDetailsDialog } from './SnapshotDetailsDialog';
 
 export interface SnapshotListProps {
@@ -45,6 +55,7 @@ export function SnapshotList({ namespace, application, title = 'Snapshots' }: Sn
   const [replications] = ApplicationSnapshotReplicationClass.useList(
     namespace ? { namespace } : {}
   );
+  const [restores] = ApplicationSnapshotRestoreClass.useList(namespace ? { namespace } : {});
   const [replicateFor, setReplicateFor] = useState<{ name: string; namespace: string } | null>(
     null
   );
@@ -62,14 +73,16 @@ export function SnapshotList({ namespace, application, title = 'Snapshots' }: Sn
           s => !application || s.jsonData?.spec?.source?.applicationRef?.name === application
         );
 
-  function replicationsFor(snapshotName: string) {
-    return (replications ?? []).filter(
-      r => r.jsonData?.spec?.applicationSnapshotName === snapshotName
-    );
+  // Match a snapshot's replications on the compound (namespace + name) key, not
+  // name alone: this list can be cluster-wide (the dashboard renders SnapshotList
+  // unscoped) and snapshot names can collide across namespaces. Feeds both the
+  // replication summary and the delete cascade.
+  function replicationsFor(snapshotName: string, snapshotNamespace?: string) {
+    return replicationsForSnapshot(replications, snapshotName, snapshotNamespace);
   }
 
-  function replicationSummary(snapshotName: string): string {
-    const list = replicationsFor(snapshotName);
+  function replicationSummary(snapshotName: string, snapshotNamespace?: string): string {
+    const list = replicationsFor(snapshotName, snapshotNamespace);
     if (list.length === 0) {
       return '—';
     }
@@ -113,7 +126,7 @@ export function SnapshotList({ namespace, application, title = 'Snapshots' }: Sn
             },
             {
               label: 'Replications',
-              getter: (s: any) => replicationSummary(s.metadata.name),
+              getter: (s: any) => replicationSummary(s.metadata.name, s.metadata.namespace),
             },
             {
               label: 'Expiry',
@@ -128,11 +141,23 @@ export function SnapshotList({ namespace, application, title = 'Snapshots' }: Sn
             },
             {
               label: '',
+              gridTemplate: 'max-content',
+              cellProps: { sx: { whiteSpace: 'nowrap' } },
               getter: (s: any) => {
                 const ready = snapshotState(s.jsonData?.status) === 'ready';
                 const ns = s.metadata.namespace ?? '';
                 return (
-                  <Stack direction="row" spacing={1} alignItems="center">
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'nowrap' }}>
+                    <RestoreButton
+                      snapshotName={s.metadata.name}
+                      namespace={ns}
+                      restorable={isRestorableSnapshot(s.jsonData)}
+                      existingRestoreState={aggregateRestoreState(
+                        restores,
+                        s.metadata.name,
+                        s.metadata.namespace
+                      )}
+                    />
                     <Tooltip
                       title={
                         ready
@@ -161,7 +186,7 @@ export function SnapshotList({ namespace, application, title = 'Snapshots' }: Sn
                           setDeleteFor({
                             name: s.metadata.name,
                             namespace: ns,
-                            replicationNames: replicationsFor(s.metadata.name).map(
+                            replicationNames: replicationsFor(s.metadata.name, s.metadata.namespace).map(
                               r => r.metadata.name
                             ),
                           })

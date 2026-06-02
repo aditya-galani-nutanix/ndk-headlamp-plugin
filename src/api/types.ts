@@ -82,9 +82,38 @@ export interface ApplicationSnapshotReplicationStatus {
 // ApplicationSnapshotRestore (dataservices.nutanix.com/v1alpha1)
 // ---------------------------------------------------------------------------
 
+/**
+ * Annotation NDK stamps on an ApplicationSnapshot that was replicated INTO this
+ * cluster (value = the source ApplicationSnapshotReplication's UID). A snapshot
+ * created locally never carries it, so it is the restorability discriminator.
+ * Const name in k8s-juno: consts.AppSnapReplUidAnnotation.
+ */
+export const REPLICATED_IN_ANNOTATION = 'dataservices.nutanix.com/app-snap-replicate-uid';
+
 export interface ApplicationSnapshotRestoreSpec {
-  snapshotRef?: { name: string };
-  targetNamespace?: string;
+  /** metadata.name of the ApplicationSnapshot to restore. Required, immutable. */
+  applicationSnapshotName: string;
+  /** Namespace of the snapshot; defaults to the restore CR's own namespace. */
+  applicationSnapshotNamespace?: string;
+  [key: string]: unknown;
+}
+
+/** Terminal/transient failure detail; `status.error` clears on retry. */
+export interface ApplicationSnapshotRestoreError {
+  time?: string;
+  reason?: string;
+  message?: string;
+}
+
+export interface ApplicationSnapshotRestoreStatus {
+  /** true once the restore has finished successfully (null/absent = not done). */
+  completed?: boolean;
+  error?: ApplicationSnapshotRestoreError;
+  conditions?: KubeCondition[];
+  startTime?: string;
+  finishTime?: string;
+  /** Name of the restored Application. */
+  boundApplication?: string;
   [key: string]: unknown;
 }
 

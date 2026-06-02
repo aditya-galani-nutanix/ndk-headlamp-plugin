@@ -3,6 +3,7 @@
 import type {
   ApplicationResourceSummary,
   ApplicationSnapshotReplicationStatus,
+  ApplicationSnapshotRestoreStatus,
   ApplicationSnapshotStatus,
   ApplicationStatus,
   JobSchedulerSpec,
@@ -13,6 +14,7 @@ import type {
   ResourcesByNamespace,
   SnapshotResourceSummary,
 } from '../api/types';
+import { REPLICATED_IN_ANNOTATION } from '../api/types';
 
 export function formatAge(timestamp?: string): string {
   if (!timestamp) {
@@ -147,6 +149,173 @@ export function replicationMessage(
     available?.reason ||
     undefined
   );
+}
+
+// ---------------------------------------------------------------------------
+// ApplicationSnapshotRestore status (drives the restore dialog)
+// ---------------------------------------------------------------------------
+
+export type RestoreState = 'restoring' | 'restored' | 'error' | 'pending';
+
+// The restore reconciler writes its current state name into the `Progressing`
+// condition's reason (k8s-juno applicationsnapshotrestore states.go). These are
+// the terminal failure states. We do NOT key failure off status.error, which is
+// cleared on retry.
+const RESTORE_TERMINAL_FAILURE_REASONS = new Set([
+  'PrechecksFailed',
+  'SubmittingVolumeCreateRequestsFailed',
+  'ApplicationConfigRestoreFailed',
+  'VolumesRestoreFailed',
+]);
+
+export function restoreState(status?: ApplicationSnapshotRestoreStatus): RestoreState {
+  if (status?.completed === true) {
+    return 'restored';
+  }
+  const progressing = findCondition(status?.conditions, 'Progressing');
+  if (progressing?.reason && RESTORE_TERMINAL_FAILURE_REASONS.has(progressing.reason)) {
+    return 'error';
+  }
+  if (status?.completed === false || status?.startTime || (status?.conditions?.length ?? 0) > 0) {
+    return 'restoring';
+  }
+  return 'pending';
+}
+
+/** Live status message shown next to the restore progress bar. */
+export function restoreMessage(status?: ApplicationSnapshotRestoreStatus): string | undefined {
+  const conditions = status?.conditions ?? [];
+  const progressing = findCondition(conditions, 'Progressing');
+
+  // On a terminal failure the controller does NOT put the real error on the
+  // `Progressing` condition: it sets that message to a pointer ("See 'X'
+  // condition for more info") and records the actual error on `status.error`
+  // and on the type-specific failing condition (k8s-juno asr_*; e.g.
+  // PrechecksPassed/VolumeRestoreRequestsSubmitted/ApplicationConfigRestored).
+  // Surface that real error instead of the unhelpful pointer.
+  if (restoreState(status) === 'error') {
+    const failingDetail = conditions.find(
+      c => c.type !== 'Progressing' && c.status === 'False' && c.message
+    );
+    return (
+      status?.error?.message ||
+      failingDetail?.message ||
+      progressing?.message ||
+      progressing?.reason ||
+      undefined
+    );
+  }
+
+  if (progressing?.message) {
+    return progressing.message;
+  }
+  // Fall back to the most recent not-yet-satisfied condition, then the error.
+  const pending = [...conditions].reverse().find(c => c.status === 'False');
+  return pending?.message || progressing?.reason || status?.error?.message || undefined;
+}
+
+/**
+ * Minimal shape of a namespaced resource that references an ApplicationSnapshot
+ * by name (ApplicationSnapshotReplication / ApplicationSnapshotRestore).
+ */
+export interface SnapshotChildLike {
+  metadata?: { namespace?: string };
+  jsonData?: {
+    metadata?: { namespace?: string };
+    spec?: { applicationSnapshotName?: string };
+    status?: unknown;
+  };
+}
+
+/** Minimal shape of a watched ApplicationSnapshotRestore for aggregation. */
+export interface RestoreLike extends SnapshotChildLike {
+  jsonData?: {
+    metadata?: { namespace?: string };
+    spec?: { applicationSnapshotName?: string };
+    status?: ApplicationSnapshotRestoreStatus;
+  };
+}
+
+/**
+ * Whether a child CR belongs to a specific snapshot, matched on the COMPOUND
+ * (namespace + name) key — never name alone.
+ *
+ * ApplicationSnapshot and its children are namespaced, and a child references
+ * its snapshot by name WITHIN its own namespace, so on a cluster-wide list two
+ * snapshots that share a name in different namespaces must not be conflated.
+ * (NDK sets no ownerReference/UID link from child to snapshot, so the namespaced
+ * name is the snapshot's identity here.)
+ */
+function belongsToSnapshot(
+  child: SnapshotChildLike,
+  snapshotName: string,
+  snapshotNamespace?: string
+): boolean {
+  return (
+    child.jsonData?.spec?.applicationSnapshotName === snapshotName &&
+    (child.metadata?.namespace ?? child.jsonData?.metadata?.namespace) === snapshotNamespace
+  );
+}
+
+/**
+ * Replications that belong to a specific snapshot, matched on the compound
+ * (namespace + name) key. Drives both the "available/total" summary and the
+ * delete cascade, so it must never match by name alone.
+ */
+export function replicationsForSnapshot<T extends SnapshotChildLike>(
+  replications: T[] | null | undefined,
+  snapshotName: string,
+  snapshotNamespace?: string
+): T[] {
+  return (replications ?? []).filter(r => belongsToSnapshot(r, snapshotName, snapshotNamespace));
+}
+
+/**
+ * Aggregate the state of every restore that targets a given snapshot, used to
+ * gate its Restore button. Restores are matched on the compound (namespace +
+ * name) key (see belongsToSnapshot).
+ *
+ * Precedence: a succeeded restore ('restored') or one still running
+ * ('restoring'/'pending') gates the button; only when every attempt failed do we
+ * return 'error' so the user can retry. undefined => no restores for it yet.
+ */
+export function aggregateRestoreState(
+  restores: RestoreLike[] | null | undefined,
+  snapshotName: string,
+  snapshotNamespace?: string
+): RestoreState | undefined {
+  const list = (restores ?? []).filter(r => belongsToSnapshot(r, snapshotName, snapshotNamespace));
+  if (list.length === 0) {
+    return undefined;
+  }
+  const states = list.map(r => restoreState(r.jsonData?.status));
+  if (states.includes('restored')) {
+    return 'restored';
+  }
+  if (states.some(s => s === 'restoring' || s === 'pending')) {
+    return 'restoring';
+  }
+  return 'error';
+}
+
+/**
+ * "Smart restore" gate: a snapshot is restorable only if it was replicated INTO
+ * this cluster (carries REPLICATED_IN_ANNOTATION) and is ready to use. Locally
+ * created snapshots lack the annotation and stay disabled.
+ */
+export function isRestorableSnapshot(snapshot?: {
+  metadata?: { annotations?: { [key: string]: string } };
+  status?: ApplicationSnapshotStatus;
+}): boolean {
+  const hasAnnotation = Boolean(snapshot?.metadata?.annotations?.[REPLICATED_IN_ANNOTATION]);
+  return hasAnnotation && snapshotState(snapshot?.status) === 'ready';
+}
+
+/** Unique ApplicationSnapshotRestore name for a snapshot (random suffix). */
+export function makeRestoreName(snapshotName: string): string {
+  const suffix = `-restore-${randomSuffix()}`;
+  const base = sanitizeRFC1123(snapshotName, 63 - suffix.length);
+  return sanitizeRFC1123(`${base}${suffix}`);
 }
 
 // ---------------------------------------------------------------------------
