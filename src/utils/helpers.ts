@@ -336,6 +336,169 @@ export function targetUnavailableReason(status?: ReplicationTargetStatus): strin
 }
 
 // ---------------------------------------------------------------------------
+// ReplicationTarget dependents (drive a SAFE delete)
+//
+// Deleting a ReplicationTarget is only safe once nothing in its namespace still
+// references it. Verified against k8s-juno, three referrers matter:
+//
+//   * ApplicationSnapshotReplication (spec.replicationTargetName) — the ASR
+//     controller adds a per-ASR finalizer onto the target
+//     (applicationsnapshotreplication/operations.go: EnsureFinalizer(... want=true,
+//     replnTarget)) and only releases it when the ASR is deleted. HARD blocker:
+//     deleting the target while an ASR references it leaves it stuck in
+//     Terminating.
+//   * AppNearSyncProtection (spec.replicationTargetRef{name,namespace}) — the
+//     NSP controller locks the target with nspFinalizer
+//     (appnearsyncprotection/nsp_lock_dependencies.go) and unlocks it on NSP
+//     delete. HARD blocker, same Terminating hazard.
+//   * ProtectionPlan (spec.replicationConfigs[].replicationTargetName) — holds
+//     no finalizer, but the plan goes Available=False / Degraded
+//     (ReplicationTargetNotFound, see protectionplan_controller.go) the moment
+//     its target disappears. SOFT blocker: deletion succeeds but silently breaks
+//     the plan, so we warn and require explicit confirmation.
+//
+// The target's OWN controller finalizer (dataservices.nutanix.com/
+// replication-target) is released cleanly by its controller during deletion (it
+// only tears down remote health monitoring), so it is never a blocker. We never
+// force-remove finalizers — we refuse to delete a target with hard blockers and
+// merely warn about soft ones.
+// ---------------------------------------------------------------------------
+
+interface NamespacedLike {
+  metadata?: { name?: string; namespace?: string };
+  jsonData?: { metadata?: { name?: string; namespace?: string } };
+}
+
+/** Resource name from either the Headlamp wrapper or the raw object. */
+function objName(o: NamespacedLike): string | undefined {
+  return o.metadata?.name ?? o.jsonData?.metadata?.name;
+}
+
+/** Resource namespace from either the Headlamp wrapper or the raw object. */
+function objNamespace(o: NamespacedLike): string | undefined {
+  return o.metadata?.namespace ?? o.jsonData?.metadata?.namespace;
+}
+
+/** Minimal ApplicationSnapshotReplication shape for dependent detection. */
+export interface ReplicationTargetReferrerLike extends NamespacedLike {
+  jsonData?: {
+    metadata?: { name?: string; namespace?: string };
+    spec?: { replicationTargetName?: string };
+  };
+}
+
+/** Minimal ProtectionPlan shape for dependent detection. */
+export interface ProtectionPlanReferrerLike extends NamespacedLike {
+  jsonData?: {
+    metadata?: { name?: string; namespace?: string };
+    spec?: { replicationConfigs?: { replicationTargetName?: string }[] };
+  };
+}
+
+/** Minimal AppNearSyncProtection shape for dependent detection. */
+export interface NearSyncReferrerLike extends NamespacedLike {
+  jsonData?: {
+    metadata?: { name?: string; namespace?: string };
+    spec?: { replicationTargetRef?: { name?: string; namespace?: string } };
+  };
+}
+
+/**
+ * ApplicationSnapshotReplications that reference a target, matched on the
+ * COMPOUND (namespace + name) key — never name alone, since the target is
+ * namespaced and the ASR resolves it within its own namespace.
+ */
+export function replicationsUsingTarget<T extends ReplicationTargetReferrerLike>(
+  replications: T[] | null | undefined,
+  targetName: string,
+  namespace?: string
+): T[] {
+  return (replications ?? []).filter(
+    r =>
+      r.jsonData?.spec?.replicationTargetName === targetName && objNamespace(r) === namespace
+  );
+}
+
+/**
+ * ProtectionPlans whose replicationConfigs reference a target, matched on the
+ * compound (namespace + name) key (the plan resolves the target in its own
+ * namespace).
+ */
+export function protectionPlansUsingTarget<T extends ProtectionPlanReferrerLike>(
+  plans: T[] | null | undefined,
+  targetName: string,
+  namespace?: string
+): T[] {
+  return (plans ?? []).filter(
+    p =>
+      objNamespace(p) === namespace &&
+      (p.jsonData?.spec?.replicationConfigs ?? []).some(
+        c => c?.replicationTargetName === targetName
+      )
+  );
+}
+
+/**
+ * AppNearSyncProtections that reference a target. NSP carries an explicit
+ * namespaced ReplicationTargetRef, so we match on ref.name + ref.namespace (the
+ * exact binding the controller uses to place its lock finalizer).
+ */
+export function nearSyncProtectionsUsingTarget<T extends NearSyncReferrerLike>(
+  nsps: T[] | null | undefined,
+  targetName: string,
+  namespace?: string
+): T[] {
+  return (nsps ?? []).filter(n => {
+    const ref = n.jsonData?.spec?.replicationTargetRef;
+    return ref?.name === targetName && ref?.namespace === namespace;
+  });
+}
+
+/** Names of everything that depends on a target, split by blocker severity. */
+export interface ReplicationTargetDependents {
+  /** ApplicationSnapshotReplication names — HARD blockers (finalizer on target). */
+  replications: string[];
+  /** AppNearSyncProtection names — HARD blockers (lock finalizer on target). */
+  nearSyncProtections: string[];
+  /** ProtectionPlan names — SOFT blockers (plan degrades when target is gone). */
+  protectionPlans: string[];
+}
+
+export interface ReplicationTargetDependentInputs {
+  replications?: ReplicationTargetReferrerLike[] | null;
+  protectionPlans?: ProtectionPlanReferrerLike[] | null;
+  nearSyncProtections?: NearSyncReferrerLike[] | null;
+}
+
+/** Collect the dependents of a (namespace, name) target for the delete gate. */
+export function replicationTargetDependents(
+  targetName: string,
+  namespace: string | undefined,
+  inputs: ReplicationTargetDependentInputs
+): ReplicationTargetDependents {
+  const names = <T extends NamespacedLike>(list: T[]) =>
+    list.map(objName).filter((n): n is string => Boolean(n));
+  return {
+    replications: names(replicationsUsingTarget(inputs.replications, targetName, namespace)),
+    nearSyncProtections: names(
+      nearSyncProtectionsUsingTarget(inputs.nearSyncProtections, targetName, namespace)
+    ),
+    protectionPlans: names(
+      protectionPlansUsingTarget(inputs.protectionPlans, targetName, namespace)
+    ),
+  };
+}
+
+/**
+ * True when a target has HARD blockers (an ApplicationSnapshotReplication or
+ * AppNearSyncProtection still finalizes it). Deleting it now would leave it
+ * stuck in Terminating, so the UI must refuse.
+ */
+export function hasHardBlockers(d: ReplicationTargetDependents): boolean {
+  return d.replications.length > 0 || d.nearSyncProtections.length > 0;
+}
+
+// ---------------------------------------------------------------------------
 // Remote (cluster) availability (drives the cluster picker)
 // ---------------------------------------------------------------------------
 

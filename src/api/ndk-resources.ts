@@ -102,3 +102,15 @@ export const AppProtectionPlanClass = makeCustomResourceClass({
   singularName: 'appprotectionplan',
   isNamespaced: true,
 });
+
+// AppNearSyncProtection is the NearSync-DR protection for an application; it
+// locks (finalizes) the ReplicationTarget it points at. Only present when
+// NearSync DR is enabled, so its useList degrades gracefully (returns an error)
+// on clusters without the CRD. We list it purely to gate a safe target delete.
+export const AppNearSyncProtectionClass = makeCustomResourceClass({
+  apiInfo: [{ group: NDK_GROUP, version: NDK_VERSION }],
+  kind: 'AppNearSyncProtection',
+  pluralName: 'appnearsyncprotections',
+  singularName: 'appnearsyncprotection',
+  isNamespaced: true,
+});
