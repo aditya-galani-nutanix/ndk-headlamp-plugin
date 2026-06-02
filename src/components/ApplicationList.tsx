@@ -26,7 +26,11 @@ function ApplicationStatusChip({ status }: { status?: ApplicationStatus }) {
   const state = applicationState(status);
   const map: Record<
     ReturnType<typeof applicationState>,
-    { label: string; color: 'success' | 'info' | 'warning' | 'error' | 'default'; outlined?: boolean }
+    {
+      label: string;
+      color: 'success' | 'info' | 'warning' | 'error' | 'default';
+      outlined?: boolean;
+    }
   > = {
     active: { label: 'Active', color: 'success' },
     collecting: { label: 'Collecting', color: 'info' },
@@ -36,7 +40,12 @@ function ApplicationStatusChip({ status }: { status?: ApplicationStatus }) {
   };
   const c = map[state];
   const chip = (
-    <Chip size="small" label={c.label} color={c.color} variant={c.outlined ? 'outlined' : 'filled'} />
+    <Chip
+      size="small"
+      label={c.label}
+      color={c.color}
+      variant={c.outlined ? 'outlined' : 'filled'}
+    />
   );
   const msg = applicationMessage(status);
   return msg ? <Tooltip title={msg}>{chip}</Tooltip> : chip;

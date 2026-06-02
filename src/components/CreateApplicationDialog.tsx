@@ -100,10 +100,7 @@ export function CreateApplicationDialog({ onClose }: DialogProps) {
   const [error, setError] = useState<string | null>(null);
 
   const nsOptions = useMemo(
-    () =>
-      (namespaces ?? [])
-        .map(n => n.metadata.name)
-        .sort((a, b) => a.localeCompare(b)),
+    () => (namespaces ?? []).map(n => n.metadata.name).sort((a, b) => a.localeCompare(b)),
     [namespaces]
   );
 
@@ -135,7 +132,9 @@ export function CreateApplicationDialog({ onClose }: DialogProps) {
     setLabels(prev => [...prev, { key: '', value: '' }]);
   }
   function removeLabel(i: number) {
-    setLabels(prev => (prev.length === 1 ? [{ key: '', value: '' }] : prev.filter((_, idx) => idx !== i)));
+    setLabels(prev =>
+      prev.length === 1 ? [{ key: '', value: '' }] : prev.filter((_, idx) => idx !== i)
+    );
   }
 
   async function handleCreate() {
@@ -163,8 +162,8 @@ export function CreateApplicationDialog({ onClose }: DialogProps) {
       <DialogContent dividers>
         {done ? (
           <Alert severity="success">
-            Application “{name.trim()}” created in “{ns}”. It now appears in the Applications list and
-            the snapshot picker.
+            Application “{name.trim()}” created in “{ns}”. It now appears in the Applications list
+            and the snapshot picker.
           </Alert>
         ) : (
           <Stack spacing={2} sx={{ mt: 1 }}>
@@ -250,18 +249,18 @@ export function CreateApplicationDialog({ onClose }: DialogProps) {
                       sx={{ flex: 1 }}
                     />
                     <Tooltip title="Remove label">
-                      <IconButton aria-label="Remove label" onClick={() => removeLabel(i)} size="small">
+                      <IconButton
+                        aria-label="Remove label"
+                        onClick={() => removeLabel(i)}
+                        size="small"
+                      >
                         <Icon icon="mdi:close" />
                       </IconButton>
                     </Tooltip>
                   </Box>
                 ))}
                 <Box>
-                  <Button
-                    size="small"
-                    startIcon={<Icon icon="mdi:plus" />}
-                    onClick={addLabel}
-                  >
+                  <Button size="small" startIcon={<Icon icon="mdi:plus" />} onClick={addLabel}>
                     Add label
                   </Button>
                 </Box>

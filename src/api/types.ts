@@ -124,11 +124,122 @@ export interface RemoteStatus {
 
 // ---------------------------------------------------------------------------
 // JobScheduler (scheduler.nutanix.com/v1alpha1)
+// Field names verified against k8s-job-scheduler api/v1alpha1/jobscheduler_types.go.
+// The spec is a one-of: exactly one of interval/daily/weekly/monthly/cronSchedule
+// may be set. The spec is immutable once created.
 // ---------------------------------------------------------------------------
 
+export interface IntervalSchedule {
+  /** Minutes between runs. Must be >= 60 (webhook-enforced). */
+  minutes: number;
+}
+
+export interface DailySchedule {
+  /** "HH:MM" in 24-hr format, e.g. "13:54". */
+  time: string;
+}
+
+export interface WeeklySchedule {
+  /** Days of week, e.g. "MON,WED,FRI", "1-5", or "5". */
+  days: string;
+  /** "HH:MM" in 24-hr format. */
+  time: string;
+}
+
+export interface MonthlySchedule {
+  /** Dates of month, e.g. "1", "2-7", or "3,7,11". */
+  dates: string;
+  /** "HH:MM" in 24-hr format. */
+  time: string;
+}
+
 export interface JobSchedulerSpec {
-  schedule?: string; // cron expression
-  suspend?: boolean;
+  interval?: IntervalSchedule;
+  daily?: DailySchedule;
+  weekly?: WeeklySchedule;
+  monthly?: MonthlySchedule;
+  /** Standard 5-field cron expression. Effective interval must be >= 60m. */
+  cronSchedule?: string;
+  /** First trigger time (RFC3339). Must be in the future when set. */
+  startTime?: string;
+  /** IANA time zone name, e.g. "America/Los_Angeles". */
+  timeZoneName?: string;
+  [key: string]: unknown;
+}
+
+export interface JobSchedulerStatus {
+  /** RFC3339 timestamp of the last triggered run. */
+  lastActivation?: string;
+  /** RFC3339 timestamp of the next scheduled run. */
+  nextActivation?: string;
+  lastUpdatedAt?: string;
+  [key: string]: unknown;
+}
+
+// ---------------------------------------------------------------------------
+// ProtectionPlan (dataservices.nutanix.com/v1alpha1)
+// Field names verified against k8s-juno api/dataservices/v1alpha1/protectionplan_types.go.
+// Spec is immutable once created.
+// ---------------------------------------------------------------------------
+
+export interface RetentionPolicy {
+  labelSelector?: LabelSelector;
+  /** Number of most-recent ApplicationSnapshots to retain. */
+  retentionCount?: number;
+}
+
+export interface ReplicationConfig {
+  replicationTargetName?: string;
+  labels?: { [key: string]: string };
+  annotations?: { [key: string]: string };
+}
+
+export interface ProtectionPlanSpec {
+  /** "sync" | "async" | "nearSyncDR". The plugin only creates "async". */
+  protectionType?: string;
+  /** metadata.name of the JobScheduler that defines when snapshots run. */
+  scheduleName?: string;
+  /** Go duration string; only for protectionType=nearSyncDR. */
+  rpo?: string;
+  labels?: { [key: string]: string };
+  annotations?: { [key: string]: string };
+  retentionPolicy?: RetentionPolicy;
+  replicationConfigs?: ReplicationConfig[];
+  [key: string]: unknown;
+}
+
+export interface ProtectionPlanStatus {
+  conditions?: KubeCondition[];
+  [key: string]: unknown;
+}
+
+// ---------------------------------------------------------------------------
+// AppProtectionPlan (dataservices.nutanix.com/v1alpha1)
+// Field names verified against k8s-juno api/dataservices/v1alpha1/appprotectionplan_types.go.
+// Spec is immutable once created.
+// ---------------------------------------------------------------------------
+
+export interface AppProtectionPlanSpec {
+  /** metadata.name of the Application to protect. */
+  applicationName: string;
+  /** metadata.names of the ProtectionPlans to apply. */
+  protectionPlanNames: string[];
+  labels?: { [key: string]: string };
+  annotations?: { [key: string]: string };
+  [key: string]: unknown;
+}
+
+export interface ProtectionPlanExecutionStatus {
+  protectionPlanName?: string;
+  /** Time the plan should have last executed. */
+  lastScheduledExecutionTime?: string;
+  /** Time the plan was last executed. */
+  lastExecutionTime?: string;
+}
+
+export interface AppProtectionPlanStatus {
+  protectionPlanExecutionStatus?: ProtectionPlanExecutionStatus[];
+  conditions?: KubeCondition[];
   [key: string]: unknown;
 }
 

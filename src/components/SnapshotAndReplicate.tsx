@@ -280,10 +280,7 @@ function SnapshotReplicateDialog({ application, namespace, onClose }: DialogProp
       : undefined);
 
   const formValid =
-    Boolean(applicationName) &&
-    Boolean(ns) &&
-    !nameError &&
-    (!alsoReplicate || remotes.length > 0);
+    Boolean(applicationName) && Boolean(ns) && !nameError && (!alsoReplicate || remotes.length > 0);
 
   async function handleStart() {
     const trimmedName = snapshotName.trim();

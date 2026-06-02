@@ -162,7 +162,11 @@ export function SnapshotDetailsDialog({ snapshot, onClose }: SnapshotDetailsDial
             />
             <MetaRow
               label="Expires"
-              value={status?.expirationTime ? new Date(status.expirationTime).toLocaleString() : undefined}
+              value={
+                status?.expirationTime
+                  ? new Date(status.expirationTime).toLocaleString()
+                  : undefined
+              }
             />
             <MetaRow label="Snapshot content" value={status?.boundApplicationSnapshotContentName} />
           </Box>

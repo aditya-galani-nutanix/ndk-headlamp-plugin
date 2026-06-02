@@ -93,9 +93,9 @@ export function DeleteSnapshotDialog({
             {replCount > 0 ? (
               <Alert severity="warning">
                 <Typography variant="body2" sx={{ mb: 1 }}>
-                  This snapshot has {replCount} replication{replCount > 1 ? 's' : ''} on this cluster
-                  that must be removed first (NDK does not delete them automatically, and they block
-                  the snapshot's deletion). These will be deleted too:
+                  This snapshot has {replCount} replication{replCount > 1 ? 's' : ''} on this
+                  cluster that must be removed first (NDK does not delete them automatically, and
+                  they block the snapshot's deletion). These will be deleted too:
                 </Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
                   {replicationNames.map(n => (
@@ -134,7 +134,9 @@ export function DeleteSnapshotDialog({
               disabled={phase === 'deleting'}
               startIcon={<Icon icon="mdi:delete" />}
             >
-              {replCount > 0 ? `Delete snapshot + ${replCount} replication${replCount > 1 ? 's' : ''}` : 'Delete snapshot'}
+              {replCount > 0
+                ? `Delete snapshot + ${replCount} replication${replCount > 1 ? 's' : ''}`
+                : 'Delete snapshot'}
             </Button>
           </>
         )}
