@@ -18,10 +18,15 @@ export interface InstallInputs {
   volumeBindingMode: VolumeBindingMode;
   /**
    * Set up the kube-vip service-LB for ndk-intercom-service (needed for SyncRep).
-   * The VIP is auto-detected from the cluster's Jarvis static IPs and free-checked
-   * by the installer — never entered by hand. Off = snapshot-only (no external IP).
+   * Off = snapshot-only (no external IP).
    */
   enableLb: boolean;
+  /**
+   * External VIP assigned to ndk-intercom-service. Pick a free static IP with the
+   * SyncRep doc's get-free-static-ips.sh; the installer re-checks it is free
+   * before kube-vip claims it. Required when enableLb is true.
+   */
+  lbIp: string;
   pcUsername: string;
   pcPassword: string;
   customValuesUrl: string;
@@ -50,6 +55,7 @@ export const DEFAULT_INPUTS: InstallInputs = {
   osName: 'ubuntu',
   volumeBindingMode: 'WaitForFirstConsumer',
   enableLb: true,
+  lbIp: '',
   pcUsername: 'admin',
   pcPassword: 'Nutanix.123',
   customValuesUrl: '',
@@ -114,6 +120,13 @@ export function validateInputs(i: InstallInputs): Partial<Record<keyof InstallIn
   if (i.scName.trim() && !RFC1123.test(i.scName.trim())) {
     errors.scName = RFC1123_MSG;
   }
+  if (i.enableLb) {
+    if (!i.lbIp.trim()) {
+      errors.lbIp = 'LoadBalancer IP is required (find a free one with get-free-static-ips.sh).';
+    } else if (!IPV4.test(i.lbIp.trim())) {
+      errors.lbIp = 'Must be a valid IPv4 address.';
+    }
+  }
   if (i.enableRemote) {
     if (!i.remoteName.trim()) {
       errors.remoteName = 'Remote name is required.';
@@ -153,6 +166,9 @@ export function inputsToEnv(i: InstallInputs): Record<string, string> {
     PC_UUID: i.pcUuid.trim(),
   };
   env.ENABLE_LB = i.enableLb ? 'true' : 'false';
+  if (i.enableLb && i.lbIp.trim()) {
+    env.LB_IP = i.lbIp.trim();
+  }
   if (i.customValuesUrl.trim()) {
     env.CUSTOM_VALUES_URL = i.customValuesUrl.trim();
   }

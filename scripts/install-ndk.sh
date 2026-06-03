@@ -37,11 +37,11 @@ validate_ipv4() {
   fi
 }
 
-# ---- SyncRep LoadBalancer helpers (free-IP discovery + validation) ----
-# Mirrors the SyncRep doc's get-free-static-ips.sh: candidates come from the
-# cluster's Jarvis static-IP allocation, and an IP counts as "in use" if it
-# answers ICMP or has a common TCP port open. We never ask the operator for the
-# VIP (a hand-picked IP risks colliding with one already in use).
+# ---- SyncRep LoadBalancer helpers (free-IP validation) ----
+# The operator supplies the VIP (LB_IP), having picked a free one with the
+# SyncRep doc's get-free-static-ips.sh. Before kube-vip claims it we re-check it
+# is free: an IP counts as "in use" if it answers ICMP or has a common TCP port
+# open, or if it is already bound to another Service.
 
 # True (0) if $1 looks occupied: responds to ping, else has a common port open.
 ip_in_use() {
@@ -64,22 +64,6 @@ ip_claimed_by_service() {
   kubectl get svc -A -o jsonpath='{range .items[*]}{.metadata.namespace}{"/"}{.metadata.name}{" "}{.status.loadBalancer.ingress[*].ip}{" "}{.spec.externalIPs[*]}{" "}{.spec.loadBalancerIP}{"\n"}{end}' 2>/dev/null \
     | grep -v "/ndk-intercom-service " \
     | grep -Fwq "$ip"
-}
-
-# Echo the cluster's reserved static IPs (one per line) from Jarvis. The
-# interesting list lives in data.custom (itself a JSON string), under static_ips.
-jarvis_static_ips() {
-  cl="$1"
-  out="$(curl -sk --max-time 15 "https://jarvis.eng.nutanix.com/api/v1/clusters/$cl" 2>/dev/null)" || return 1
-  [ -n "$out" ] || return 1
-  if command -v jq >/dev/null 2>&1; then
-    printf '%s' "$out" | jq -r '.data.custom | fromjson | .static_ips[].ip' 2>/dev/null
-  elif command -v python3 >/dev/null 2>&1; then
-    printf '%s' "$out" | python3 -c 'import sys,json;d=json.load(sys.stdin);c=d.get("data",{}).get("custom");c=json.loads(c) if isinstance(c,str) else (c or {});print("\n".join(x.get("ip","") for x in c.get("static_ips",[])))' 2>/dev/null
-  else
-    # No JSON parser: best-effort scrape of IPv4s from the static_ips block.
-    printf '%s' "$out" | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}'
-  fi
 }
 
 log "Prechecks"
@@ -149,18 +133,23 @@ reclaimPolicy: Retain
 volumeBindingMode: ${VOLUME_BINDING_MODE}
 EOF
 
-log "Step 2d: LoadBalancer for ndk-intercom-service (auto-detected free VIP)"
+log "Step 2d: LoadBalancer for ndk-intercom-service (operator-provided VIP)"
 # NDK exposes ndk-intercom-service as a LoadBalancer (:2021) for SyncRep/Remote
 # reachability. CAPX/AHV clusters have no cloud LB, so install kube-vip's
 # service-LB: the cloud-provider hands out IPs from a pool and the DaemonSet
 # advertises them via ARP. Non-fatal — NDK installs fine without it; only Remote
-# replication needs the external IP. The VIP is discovered (Jarvis static IPs +
-# free-check), never supplied by hand. Versions/config mirror a known-good
-# cluster; the kube-vip SA + role already exist from the control-plane VIP.
-LB_IP=""
+# replication needs the external IP. The VIP is supplied by the operator (LB_IP);
+# find a free one first with the SyncRep doc's get-free-static-ips.sh. We re-check
+# it is actually free right before claiming it. The kube-vip SA + role already
+# exist from the control-plane VIP.
+LB_IP="${LB_IP:-}"
 if [ "${ENABLE_LB:-true}" != "true" ]; then
   echo "ENABLE_LB=${ENABLE_LB:-true}; skipping LoadBalancer (snapshot-only). ndk-intercom-service will stay <pending>."
+  LB_IP=""
+elif [ -z "$LB_IP" ]; then
+  echo "WARN: ENABLE_LB=true but no LB_IP provided; skipping LB. ndk-intercom-service will stay <pending> (SyncRep/Remote needs an external IP). Find a free static IP with get-free-static-ips.sh and set LB_IP."
 else
+  validate_ipv4 "$LB_IP"
   # kube-vip's service-LB needs the kube-vip RBAC. CAPX/AHV clusters already have
   # it (from the control-plane VIP); otherwise bootstrap it the way the SyncRep
   # doc's kubevip-install.sh does, and only skip if it's still absent afterward.
@@ -170,34 +159,30 @@ else
   fi
   if ! kubectl -n kube-system get sa kube-vip >/dev/null 2>&1; then
     echo "WARN: 'kube-vip' ServiceAccount still missing; skipping service-LB. ndk-intercom-service will stay <pending> (SyncRep/Remote needs an external IP)."
+    LB_IP=""
   else
     # Re-run guard: if ndk-intercom-service already holds an external IP, keep it
     # rather than churning to a new VIP.
     existing_ip="$(kubectl -n "$NAMESPACE" get svc ndk-intercom-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)"
     if [ -n "$existing_ip" ]; then
-      echo "ndk-intercom-service already has external IP $existing_ip; reusing it"
+      if [ "$existing_ip" != "$LB_IP" ]; then
+        echo "ndk-intercom-service already has external IP $existing_ip (requested $LB_IP); reusing the assigned IP"
+      else
+        echo "ndk-intercom-service already has external IP $existing_ip; reusing it"
+      fi
       LB_IP="$existing_ip"
     else
-      echo "Discovering a free static IP from Jarvis for cluster '$CLUSTER_NAME'..."
-      candidates="$(jarvis_static_ips "$CLUSTER_NAME" || true)"
-      if [ -z "$candidates" ]; then
-        echo "WARN: could not get static IPs from Jarvis for '$CLUSTER_NAME' (unreachable, no jq/python3, or unknown cluster name). Skipping LB; ndk-intercom-service will stay <pending>."
+      # Extra free-check on the operator-provided IP: get-free-static-ips.sh picked
+      # it, but re-validate right before claiming to catch a racing claim.
+      echo "Validating requested LB_IP $LB_IP is free..."
+      if ip_in_use "$LB_IP"; then
+        echo "WARN: requested LB_IP $LB_IP is in use (ICMP/TCP); skipping LB. Pick a free IP (get-free-static-ips.sh). ndk-intercom-service will stay <pending>."
+        LB_IP=""
+      elif ip_claimed_by_service "$LB_IP"; then
+        echo "WARN: requested LB_IP $LB_IP is already bound to another Service; skipping LB. Pick a different IP. ndk-intercom-service will stay <pending>."
+        LB_IP=""
       else
-        echo "Jarvis candidates: $(printf '%s' "$candidates" | tr '\n' ' ')"
-        for ip in $candidates; do
-          validate_ipv4 "$ip" 2>/dev/null || continue
-          echo "checking $ip ..."
-          if ip_in_use "$ip"; then echo "  in use (ICMP/TCP) - skip"; continue; fi
-          if ip_claimed_by_service "$ip"; then echo "  already bound to another Service - skip"; continue; fi
-          # Extra check: probe once more after a short pause to catch a racing claim
-          # between the first scan and actually taking the IP.
-          sleep 2
-          if ip_in_use "$ip"; then echo "  became reachable on re-check - skip"; continue; fi
-          LB_IP="$ip"
-          echo "  selected free IP: $ip"
-          break
-        done
-        [ -n "$LB_IP" ] || echo "WARN: no free IP among Jarvis candidates; skipping LB. Free one up (or re-run); ndk-intercom-service will stay <pending>."
+        echo "  $LB_IP is free; using it as the ndk-intercom-service VIP"
       fi
     fi
   fi
