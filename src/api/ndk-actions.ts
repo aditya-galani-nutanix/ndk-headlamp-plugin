@@ -213,6 +213,8 @@ export interface CreateReplicationTargetArgs {
   remoteName: string;
   /** Namespace on the remote cluster. Defaults to "default" on the backend. */
   namespaceName?: string;
+  /** Service account to use on the remote namespace. Defaults to "default". */
+  serviceAccountName?: string;
 }
 
 /** POST a ReplicationTarget that binds the namespace to a Remote. */
@@ -221,6 +223,7 @@ export function createReplicationTarget({
   namespace,
   remoteName,
   namespaceName,
+  serviceAccountName,
 }: CreateReplicationTargetArgs): Promise<unknown> {
   return ReplicationTargetClass.apiEndpoint.post({
     apiVersion: NDK_GROUP_VERSION,
@@ -229,8 +232,50 @@ export function createReplicationTarget({
     spec: {
       remoteName,
       ...(namespaceName ? { namespaceName } : {}),
+      ...(serviceAccountName ? { serviceAccountName } : {}),
     },
   });
+}
+
+export interface DeleteReplicationTargetArgs {
+  name: string;
+  namespace: string;
+}
+
+/**
+ * Delete a ReplicationTarget — SAFE-DELETE CONTRACT (verified against k8s-juno).
+ *
+ * This issues a plain namespaced delete and lets the controllers do the real
+ * cleanup; it NEVER force-removes finalizers. Callers MUST first confirm the
+ * target has no hard dependents in its namespace, because each of these places
+ * a finalizer on the target and a delete would otherwise hang in `Terminating`
+ * until they are removed:
+ *   - ApplicationSnapshotReplication (spec.replicationTargetName) — per-ASR
+ *     finalizer added in applicationsnapshotreplication/operations.go.
+ *   - AppNearSyncProtection (spec.replicationTargetRef) — lock finalizer added
+ *     in appnearsyncprotection/nsp_lock_dependencies.go.
+ * A ProtectionPlan that references the target holds no finalizer, so the delete
+ * succeeds, but the plan goes Degraded (ReplicationTargetNotFound) — warn first.
+ * Use helpers.replicationTargetDependents()/DeleteReplicationTargetDialog to gate.
+ *
+ * The target's own controller finalizer (dataservices.nutanix.com/
+ * replication-target) is released by the ReplicationTarget controller as part of
+ * normal deletion (it only tears down remote health monitoring), so once there
+ * are no external finalizers the object is removed promptly.
+ *
+ * Idempotent: a 404 (already deleted) is treated as success.
+ */
+export async function deleteReplicationTarget({
+  name,
+  namespace,
+}: DeleteReplicationTargetArgs): Promise<void> {
+  try {
+    await ReplicationTargetClass.apiEndpoint.delete(namespace, name);
+  } catch (e) {
+    if (!isNotFound(e)) {
+      throw e;
+    }
+  }
 }
 
 /** Minimal view of an existing ReplicationTarget used for reuse lookups. */
