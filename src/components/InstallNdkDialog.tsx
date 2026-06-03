@@ -269,12 +269,17 @@ export function InstallNdkDialog({ open, onClose }: InstallNdkDialogProps) {
           control={
             <Switch checked={inputs.enableLb} onChange={e => set('enableLb', e.target.checked)} />
           }
-          label="Set up SyncRep LoadBalancer (auto-detect a free VIP)"
+          label="Set up SyncRep LoadBalancer"
         />
+        {inputs.enableLb &&
+          text('lbIp', 'LoadBalancer IP (external VIP)', {
+            required: true,
+            placeholder: '10.124.90.18',
+            helper:
+              'Free static IP for ndk-intercom-service. Find one with get-free-static-ips.sh (from the SyncRep doc); the installer re-checks it is free before assigning it via kube-vip.',
+          })}
         <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 1 }}>
-          No manual IP: the installer reads the cluster's reserved static IPs from Jarvis, verifies
-          one is actually free (ICMP + TCP probe, plus a re-check), and assigns it to
-          ndk-intercom-service via kube-vip. Turn off for snapshot-only (no external IP).
+          Turn off for snapshot-only (no external IP).
         </Typography>
         {text('customValuesUrl', 'Custom values URL (optional)')}
         {text('kubeconfig', 'KUBECONFIG path (optional)', {
@@ -354,8 +359,7 @@ export function InstallNdkDialog({ open, onClose }: InstallNdkDialogProps) {
         <Alert severity="info" sx={{ mt: 2 }}>
           Run in cluster creates a Job (cluster-admin) in <code>ntnx-system</code>. The cluster needs
           egress to Artifactory, github.com (cert-manager), hoth.corp.nutanix.com (canaveral),
-          nutanix.github.io, and — when the SyncRep LoadBalancer is on —
-          jarvis.eng.nutanix.com (free-VIP discovery) plus kube-vip.io /
+          nutanix.github.io, and — when the SyncRep LoadBalancer is on — kube-vip.io /
           raw.githubusercontent.com (kube-vip).
         </Alert>
 
