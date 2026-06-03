@@ -13,6 +13,7 @@ import {
 import { SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Box, Typography } from '@mui/material';
 import { AddClusterButton } from './components/AddClusterDialog';
+import { InstallNdkButton } from './components/InstallNdkButton';
 import { ProtectionDashboard } from './components/ProtectionDashboard';
 import { ReplicationList } from './components/ReplicationList';
 import { ScheduleButton } from './components/ScheduleForm';
@@ -59,6 +60,9 @@ registerRoute({
 });
 
 registerAppBarAction(<AddClusterButton />);
+
+// Self-gated: only renders when NDK is not yet installed on the cluster.
+registerAppBarAction(<InstallNdkButton />);
 
 // Add a "Snapshot & Replicate" action to every NDK Application detail view.
 registerDetailsViewSection(({ resource }: DetailsViewSectionProps) => {

@@ -10,7 +10,9 @@ import {
   ApplicationSnapshotClass,
   ApplicationSnapshotReplicationClass,
   ApplicationSnapshotRestoreClass,
+  RemoteClass,
   ReplicationTargetClass,
+  StorageClusterClass,
 } from './ndk-resources';
 
 export const NDK_GROUP_VERSION = 'dataservices.nutanix.com/v1alpha1';
@@ -254,4 +256,72 @@ export async function ensureReplicationTarget(
   const name = makeReplicationTargetName(remoteName);
   await createReplicationTarget({ name, namespace, remoteName, namespaceName: namespace });
   return name;
+}
+
+export interface CreateStorageClusterArgs {
+  name: string;
+  /** PE cluster UUID. */
+  storageServerUuid: string;
+  /** PC UUID. Optional but recommended. */
+  managementServerUuid?: string;
+}
+
+/**
+ * POST a cluster-scoped StorageCluster CR (the local PE/PC registration). This
+ * is the in-browser equivalent of `ndkcli create storagecluster`; the install
+ * script does the same via `kubectl apply`.
+ */
+export function createStorageCluster({
+  name,
+  storageServerUuid,
+  managementServerUuid,
+}: CreateStorageClusterArgs): Promise<unknown> {
+  const spec: Record<string, unknown> = { storageServerUuid };
+  if (managementServerUuid) {
+    spec.managementServerUuid = managementServerUuid;
+  }
+  return StorageClusterClass.apiEndpoint.post({
+    apiVersion: NDK_GROUP_VERSION,
+    kind: 'StorageCluster',
+    metadata: { name },
+    spec,
+  });
+}
+
+export interface CreateRemoteArgs {
+  name: string;
+  /** IP of the ndk-intercom-service on the remote cluster. */
+  ndkServiceIp: string;
+  /** TCP port of the remote NDK service. Defaults to 2021 on the backend. */
+  ndkServicePort?: number;
+  /** DNS name used as SAN in the remote cluster's TLS certificate. */
+  clusterName?: string;
+  /** Skip TLS verification of the remote NDK server certificate. */
+  skipTLSVerify?: boolean;
+}
+
+/** POST a cluster-scoped Remote CR registering a peer cluster for replication. */
+export function createRemote({
+  name,
+  ndkServiceIp,
+  ndkServicePort,
+  clusterName,
+  skipTLSVerify,
+}: CreateRemoteArgs): Promise<unknown> {
+  const spec: Record<string, unknown> = { ndkServiceIp };
+  if (ndkServicePort) {
+    spec.ndkServicePort = ndkServicePort;
+  }
+  if (clusterName) {
+    spec.clusterName = clusterName;
+  }
+  if (skipTLSVerify) {
+    spec.tlsConfig = { skipTLSVerify: true };
+  }
+  return RemoteClass.apiEndpoint.post({
+    apiVersion: NDK_GROUP_VERSION,
+    kind: 'Remote',
+    metadata: { name },
+    spec,
+  });
 }
