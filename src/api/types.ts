@@ -138,16 +138,47 @@ export interface ReplicationTargetStatus {
 // cluster" to replicate to. ReplicationTargets reference a Remote by name.
 // ---------------------------------------------------------------------------
 
+/** TLS configuration for connecting to a remote NDK server. */
+export interface RemoteTLSConfig {
+  /** Skip TLS verification of the remote NDK server certificate. */
+  skipTLSVerify?: boolean;
+  caBundle?: string;
+  enableMTLS?: boolean;
+  mTLSClientConfig?: { secretName?: string; secretNamespace?: string };
+}
+
 export interface RemoteSpec {
   clusterName?: string;
   ndkServiceIp?: string;
   ndkServicePort?: number;
+  tlsConfig?: RemoteTLSConfig;
   [key: string]: unknown;
 }
 
 export interface RemoteStatus {
   conditions?: KubeCondition[];
   clusterID?: string;
+  [key: string]: unknown;
+}
+
+// ---------------------------------------------------------------------------
+// StorageCluster (dataservices.nutanix.com/v1alpha1, cluster-scoped) — the
+// local PE/PC registration NDK uses to reach its storage backend.
+// ---------------------------------------------------------------------------
+
+export interface StorageClusterSpec {
+  /** PE cluster UUID (ncli multicluster get-cluster-state -> "Cluster Id"). Immutable. */
+  storageServerUuid: string;
+  /** PC UUID (ncli cluster info -> "Cluster Uuid"). */
+  managementServerUuid?: string;
+  [key: string]: unknown;
+}
+
+export interface StorageClusterStatus {
+  /** True once NDK can reach and use the storage backend. */
+  available?: boolean;
+  message?: string;
+  reason?: string;
   [key: string]: unknown;
 }
 

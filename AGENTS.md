@@ -17,6 +17,7 @@ The following npm scripts are available for development and testing:
 - **`npm run storybook-build`** - Build static Storybook
 - **`npm run i18n`** - Extract translatable strings for internationalization
 - **`npm run package`** - Create a tarball of the plugin package
+- **`npm run gen:script`** - Regenerate `scripts/install-ndk.sh` from the canonical body in `src/install/scriptText.ts` (run after editing the install script)
 
 ## Plugin Development Resources
 

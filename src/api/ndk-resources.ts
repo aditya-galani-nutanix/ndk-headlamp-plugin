@@ -65,6 +65,16 @@ export const RemoteClass = makeCustomResourceClass({
   isNamespaced: false,
 });
 
+// StorageCluster is cluster-scoped — the local PE/PC registration NDK uses to
+// reach its storage backend. NDK supports exactly one local StorageCluster.
+export const StorageClusterClass = makeCustomResourceClass({
+  apiInfo: [{ group: NDK_GROUP, version: NDK_VERSION }],
+  kind: 'StorageCluster',
+  pluralName: 'storageclusters',
+  singularName: 'storagecluster',
+  isNamespaced: false,
+});
+
 export const JobSchedulerClass = makeCustomResourceClass({
   apiInfo: [{ group: SCHED_GROUP, version: SCHED_VERSION }],
   kind: 'JobScheduler',

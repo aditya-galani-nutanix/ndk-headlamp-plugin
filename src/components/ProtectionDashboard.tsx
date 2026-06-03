@@ -10,6 +10,7 @@ import {
 } from '../api/ndk-resources';
 import { replicationState, snapshotState } from '../utils/helpers';
 import { ApplicationList } from './ApplicationList';
+import { InstallNdkButton, useNdkInstalled } from './InstallNdkButton';
 import { ReplicationList } from './ReplicationList';
 import { ScheduleButton } from './ScheduleForm';
 import { ScheduleList } from './ScheduleList';
@@ -30,6 +31,7 @@ function SummaryCard({ title, value }: { title: string; value: string | number }
 }
 
 export function ProtectionDashboard() {
+  const ndkInstalled = useNdkInstalled();
   const [applications] = ApplicationClass.useList();
   const [snapshots] = ApplicationSnapshotClass.useList();
   const [replications] = ApplicationSnapshotReplicationClass.useList();
@@ -51,6 +53,30 @@ export function ProtectionDashboard() {
     <SectionBox title="NDK Data Protection">
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mb: 2 }}>
         <ScheduleButton variant="outlined" />
+      </Box>
+      {ndkInstalled === false && (
+        <Card variant="outlined" sx={{ mb: 2, borderColor: 'warning.main' }}>
+          <CardContent
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 2,
+              flexWrap: 'wrap',
+            }}
+          >
+            <Box>
+              <Typography variant="h6">NDK is not installed or not ready on this cluster</Typography>
+              <Typography color="textSecondary" variant="body2">
+                Install (or re-run setup to recover) the CSI prerequisites and NDK to start
+                protecting applications.
+              </Typography>
+            </Box>
+            <InstallNdkButton />
+          </CardContent>
+        </Card>
+      )}
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
         <SnapshotAndReplicateButton />
       </Box>
       <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
