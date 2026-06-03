@@ -12,6 +12,7 @@ import {
 } from '@kinvolk/headlamp-plugin/lib';
 import { SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Box, Typography } from '@mui/material';
+import { applyUiTweaks } from './applyUiTweaks';
 import { AddClusterButton } from './components/AddClusterDialog';
 import { CreateReplicationTargetButton } from './components/CreateReplicationTargetDialog';
 import { InstallNdkButton } from './components/InstallNdkButton';
@@ -22,6 +23,9 @@ import { ScheduleButton } from './components/ScheduleForm';
 import { ScheduleList } from './components/ScheduleList';
 import { SnapshotAndReplicateButton } from './components/SnapshotAndReplicate';
 import { SnapshotList } from './components/SnapshotList';
+
+// Soften Headlamp's core cluster-error banner into a tidy floating toast.
+applyUiTweaks();
 
 registerSidebarEntry({
   parent: null,
@@ -89,7 +93,8 @@ registerRoute({
 
 registerAppBarAction(<AddClusterButton />);
 
-// Self-gated: only renders when NDK is not yet installed on the cluster.
+// Always shown. When NDK is already installed, the in-cluster install action is
+// disabled inside the dialog (the form still opens for script generation/review).
 registerAppBarAction(<InstallNdkButton />);
 
 // Add a "Snapshot & Replicate" action to every NDK Application detail view.

@@ -51,9 +51,12 @@ const PHASE_COLOR: Record<InstallPhase, 'default' | 'info' | 'success' | 'error'
 export interface InstallNdkDialogProps {
   open: boolean;
   onClose: () => void;
+  // When NDK is already installed and ready on the cluster, the in-cluster
+  // install action is disabled so the user cannot re-run it.
+  alreadyInstalled?: boolean;
 }
 
-export function InstallNdkDialog({ open, onClose }: InstallNdkDialogProps) {
+export function InstallNdkDialog({ open, onClose, alreadyInstalled = false }: InstallNdkDialogProps) {
   const [inputs, setInputs] = useState<InstallInputs>(DEFAULT_INPUTS);
   const [errors, setErrors] = useState<Partial<Record<keyof InstallInputs, string>>>({});
   const [image, setImage] = useState(DEFAULT_INSTALLER_IMAGE);
@@ -214,6 +217,13 @@ export function InstallNdkDialog({ open, onClose }: InstallNdkDialogProps) {
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
+          </Alert>
+        )}
+
+        {alreadyInstalled && (
+          <Alert severity="success" sx={{ mb: 2 }}>
+            NDK is already installed and ready on this cluster, so the in-cluster installer is
+            disabled. You can still review the inputs and generate the install script for reference.
           </Alert>
         )}
 
@@ -441,8 +451,21 @@ export function InstallNdkDialog({ open, onClose }: InstallNdkDialogProps) {
         <Button onClick={handleGenerate} variant="outlined">
           Generate script
         </Button>
-        <Button onClick={handleRun} variant="contained" disabled={running && phase !== 'failed'}>
-          {running && phase !== 'failed' && phase !== 'succeeded' ? 'Running…' : 'Run in cluster'}
+        <Button
+          onClick={handleRun}
+          variant="contained"
+          disabled={alreadyInstalled || (running && phase !== 'failed')}
+          startIcon={
+            running && phase !== 'failed' && phase !== 'succeeded' ? (
+              <CircularProgress size={16} color="inherit" />
+            ) : undefined
+          }
+        >
+          {alreadyInstalled
+            ? 'Already installed'
+            : running && phase !== 'failed' && phase !== 'succeeded'
+              ? 'Running…'
+              : 'Run in cluster'}
         </Button>
       </DialogActions>
     </Dialog>

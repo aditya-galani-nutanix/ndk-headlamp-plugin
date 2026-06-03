@@ -51,17 +51,19 @@ export function InstallNdkButton() {
   const installed = useNdkInstalled();
   const [open, setOpen] = useState(false);
 
-  // Hide while loading (null) and when NDK is already installed and ready (true).
-  if (installed !== false) {
-    return null;
-  }
-
+  // The button is always shown. When NDK is already installed and ready, the
+  // dialog still opens (so the user can review inputs / generate the script),
+  // but the in-cluster install action is disabled inside the form.
   return (
     <>
       <Button size="small" variant="outlined" color="primary" onClick={() => setOpen(true)}>
         Install NDK
       </Button>
-      <InstallNdkDialog open={open} onClose={() => setOpen(false)} />
+      <InstallNdkDialog
+        open={open}
+        onClose={() => setOpen(false)}
+        alreadyInstalled={installed === true}
+      />
     </>
   );
 }
