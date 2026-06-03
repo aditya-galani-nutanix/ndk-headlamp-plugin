@@ -13,9 +13,11 @@ import {
 import { SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
 import { Box, Typography } from '@mui/material';
 import { AddClusterButton } from './components/AddClusterDialog';
+import { CreateReplicationTargetButton } from './components/CreateReplicationTargetDialog';
 import { InstallNdkButton } from './components/InstallNdkButton';
 import { ProtectionDashboard } from './components/ProtectionDashboard';
 import { ReplicationList } from './components/ReplicationList';
+import { ReplicationTargetList } from './components/ReplicationTargetList';
 import { ScheduleButton } from './components/ScheduleForm';
 import { ScheduleList } from './components/ScheduleList';
 import { SnapshotAndReplicateButton } from './components/SnapshotAndReplicate';
@@ -59,6 +61,32 @@ registerRoute({
   ),
 });
 
+registerSidebarEntry({
+  parent: 'ndk',
+  name: 'ndk-replication-targets',
+  label: 'Replication Targets',
+  url: '/ndk/replication-targets',
+});
+
+registerRoute({
+  path: '/ndk/replication-targets',
+  sidebar: 'ndk-replication-targets',
+  name: 'ndk-replication-targets',
+  exact: true,
+  component: () => (
+    <SectionBox title="Replication Targets">
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+        <CreateReplicationTargetButton />
+      </Box>
+      <Typography color="textSecondary" variant="body2" sx={{ mb: 2 }}>
+        A replication target is the per-namespace destination snapshots replicate to. Create one for
+        each namespace + remote cluster you want to replicate to.
+      </Typography>
+      <ReplicationTargetList title="All replication targets" />
+    </SectionBox>
+  ),
+});
+
 registerAppBarAction(<AddClusterButton />);
 
 // Self-gated: only renders when NDK is not yet installed on the cluster.
@@ -85,9 +113,13 @@ registerDetailsViewSection(({ resource }: DetailsViewSectionProps) => {
               namespace={resource.getNamespace()}
               variant="outlined"
             />
+            <CreateReplicationTargetButton
+              namespace={resource.getNamespace()}
+              variant="outlined"
+            />
             <Typography color="textSecondary" variant="body2">
-              Take a manual snapshot of this application, replicate it, or schedule recurring
-              snapshots.
+              Take a manual snapshot of this application, replicate it, schedule recurring snapshots,
+              or set up a replication target for this namespace.
             </Typography>
           </Box>
         </SectionBox>
@@ -97,6 +129,10 @@ registerDetailsViewSection(({ resource }: DetailsViewSectionProps) => {
           title="Application snapshots"
         />
         <ReplicationList namespace={resource.getNamespace()} title="Replication tasks" />
+        <ReplicationTargetList
+          namespace={resource.getNamespace()}
+          title="Replication targets"
+        />
         <ScheduleList
           namespace={resource.getNamespace()}
           application={resource.getName()}
