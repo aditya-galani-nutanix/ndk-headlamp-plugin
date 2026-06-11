@@ -414,8 +414,7 @@ export function replicationsUsingTarget<T extends ReplicationTargetReferrerLike>
   namespace?: string
 ): T[] {
   return (replications ?? []).filter(
-    r =>
-      r.jsonData?.spec?.replicationTargetName === targetName && objNamespace(r) === namespace
+    r => r.jsonData?.spec?.replicationTargetName === targetName && objNamespace(r) === namespace
   );
 }
 

@@ -185,8 +185,8 @@ export function CreateReplicationTargetDialog({ fixedNamespace, onClose }: Dialo
       <DialogContent dividers>
         {done ? (
           <Alert severity="success">
-            Replication target “{name.trim()}” created in “{ns}”. Snapshots in this namespace can now
-            replicate to “{remoteName}”.
+            Replication target “{name.trim()}” created in “{ns}”. Snapshots in this namespace can
+            now replicate to “{remoteName}”.
           </Alert>
         ) : (
           <Stack spacing={2} sx={{ mt: 1 }}>

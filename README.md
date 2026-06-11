@@ -1,93 +1,71 @@
-# ndk-headlamp-plugin
+# NDK Headlamp Plugin
 
-A Headlamp plugin that adds **NDK Data Protection** features (snapshot, replicate,
-restore, schedule) to the Headlamp Kubernetes UI. Built for the NDK hackathon.
+A [Headlamp](https://headlamp.dev) plugin that brings **Nutanix Data services for
+Kubernetes (NDK)** data protection into the Kubernetes dashboard. Install NDK and
+then snapshot, replicate, restore, and schedule protection for your stateful
+workloads — all point-and-click, without touching `kubectl` or raw YAML.
 
-## Prerequisites
+## Why
 
-- Node 20 LTS + npm 10 (use `nvm install 20`).
-- The shared kubeconfig (`ndk-clusters.kubeconfig`) with the primary + secondary
-  clusters. Put it somewhere and `export KUBECONFIG=/path/to/ndk-clusters.kubeconfig`.
-- The Headlamp desktop app (v0.42.x) for the dev loop below.
+NDK protects Kubernetes applications through CRDs (`applications`,
+`applicationsnapshots`, `applicationsnapshotreplications`,
+`applicationsnapshotrestores`, `replicationtargets`, `remotes`, `jobschedulers`).
+Driving those by hand is tedious and error-prone. This plugin turns the full
+NDK data-protection lifecycle into guided UI flows inside Headlamp.
+
+## Features
+
+- **Install NDK** — a guided form that either generates a ready-to-run
+  `install-ndk.sh` or runs the installer as an in-cluster Job and streams its
+  logs live (installs CSI, cert-manager, NDK, and configures storage/remote).
+- **Add cluster** — paste or upload a kubeconfig to register a cluster with
+  Headlamp on the fly.
+- **Protection dashboard** — a single landing page (`/ndk`) with live summary
+  cards for applications, snapshots, replications, and schedules.
+- **Snapshot & replicate** — take an application snapshot and replicate it to a
+  peer cluster in one action (the headline workflow).
+- **Restore** — smart restore of a snapshot, including snapshots replicated in
+  from another cluster.
+- **Schedules** — create recurring protection jobs and pause/resume/delete them.
+- **Replication targets** — create, list, and safely delete replication targets
+  and their remote peers.
 
 ## Quick start
 
 ```bash
 git clone <this-repo> && cd ndk-headlamp-plugin
 npm install
-npm run start    # watch-builds and hot-copies into the local Headlamp desktop plugin dir
+npm run start   # watch-build + hot-copy into the local Headlamp desktop plugin dir
 ```
 
-Open the Headlamp desktop app (loaded with `ndk-clusters.kubeconfig`). The plugin
-appears as **"NDK Data Protection"** in the sidebar. Edits to `src/` rebuild and
-hot-reload automatically.
+Open the Headlamp desktop app (v0.42.x) with a kubeconfig for your NDK
+cluster(s). The plugin shows up as **NDK Data Protection** in the sidebar and
+hot-reloads on every save.
 
-## Two-track workflow
+Requirements: Node 20 LTS + npm 10 (`nvm install 20`).
 
-- **Track A — develop (per person):** `npm run start`. The watcher rebuilds on save
-  and copies into `~/.config/Headlamp/plugins/ndk-headlamp-plugin/` (Linux) /
-  `~/Library/Application Support/Headlamp/plugins/...` (macOS). Your local Headlamp
-  hot-reloads. Only you see your changes.
-- **Track B — integrate/demo (shared):** after merging to `main`, `npm run build`
-  produces `dist/main.js`, which gets deployed into the shared in-cluster Headlamp so
-  everyone (and the demo) sees the combined plugin. See `deploy-to-cluster.sh`.
+## Building & deploying
 
-## Install NDK
+- `npm run build` produces `dist/main.js` for a production install.
+- `deploy-to-cluster.sh` pushes that build into a shared in-cluster Headlamp pod
+  for demos (`KUBECONFIG=... ./deploy-to-cluster.sh`).
+- The install script is defined once in `src/install/scriptText.ts`; run
+  `npm run gen:script` to regenerate the standalone `scripts/install-ndk.sh`.
 
-When NDK is not yet installed (no `ndk-controller-manager` Deployment in
-`ntnx-system`), an **Install NDK** button appears in the AppBar and on the
-dashboard. It opens a form (CSI/NDK chart URLs, Artifactory creds, Prism Central
-IP, StorageCluster PE/PC UUIDs, optional Remote peer, etc.) with two actions:
-
-- **Generate script** — renders `install-ndk.sh` with your inputs to copy or
-  download and run yourself (`kubectl`/`helm` honor `KUBECONFIG`).
-- **Run in cluster** — creates a one-shot Job (cluster-admin) in `ntnx-system`
-  that runs the same script and streams its logs live.
-
-The script is a single source of truth in `src/install/scriptText.ts`; run
-`npm run gen:script` to refresh the standalone `scripts/install-ndk.sh`. The
-in-cluster path needs egress to Artifactory, github.com (cert-manager),
-hoth.corp.nutanix.com (canaveral certs) and nutanix.github.io.
-
-## Project structure
+## Project layout
 
 ```
 src/
-  index.tsx                 # P1 — registers sidebar, /ndk route, AppBar buttons
-  api/
-    ndk-resources.ts        # P1 (shared) — K8s factories for all NDK CRDs (incl. StorageCluster)
-    ndk-actions.ts          # imperative CR writers (snapshot/replicate, StorageCluster, Remote)
-    types.ts                # P1 (shared) — NDK CR TypeScript interfaces
-  install/
-    inputs.ts               # InstallInputs type, defaults, validation, env mapping
-    scriptText.ts           # canonical install script body + renderInstallScript()
-    installJob.ts           # in-cluster install Job manifests + log/status streaming
-  components/
-    ProtectionDashboard.tsx # P1 — landing page (/ndk) with live summary cards
-    AddClusterDialog.tsx    # P1 — AppBar "Add cluster" button (paste/upload kubeconfig -> setCluster)
-    InstallNdkDialog.tsx    # Install NDK form (generate script / run in cluster)
-    InstallNdkButton.tsx    # gated Install NDK button + useNdkInstalled() hook
-    TakeSnapshotDialog.tsx  # P2 — manual snapshot
-    SnapshotAndReplicate.tsx# P2 — merged snapshot + replicate (hero feature)
-    SnapshotList.tsx        # P3 — snapshot list + status badges
-    RestoreButton.tsx       # P3 — smart restore
-    ScheduleForm.tsx        # P4 — create recurring schedule
-    ScheduleList.tsx        # P4 — schedule list + pause/resume/delete
-  utils/
-    helpers.ts              # P1 (shared) — formatters
-scripts/
-  gen-install-script.mjs    # regenerates scripts/install-ndk.sh from scriptText.ts
-  install-ndk.sh            # generated standalone install script
+  index.tsx          # registers sidebar, /ndk route, and AppBar actions
+  api/               # K8s CRD factories, imperative writers, schedule actions, types
+  install/           # install inputs/validation, canonical script, in-cluster Job
+  components/         # dashboard + all dialogs (install, snapshot, replicate, restore, schedule)
+  utils/helpers.ts   # shared formatters
+scripts/             # generator + generated install-ndk.sh
 ```
 
-## NDK CRDs (confirmed on cluster)
+## Development
 
-- `dataservices.nutanix.com/v1alpha1`: `applications`, `applicationsnapshots`,
-  `applicationsnapshotreplications`, `applicationsnapshotrestores`,
-  `replicationtargets`, `remotes` (cluster-scoped).
-- `scheduler.nutanix.com/v1alpha1`: `jobschedulers`.
-
-## Branching
-
-Work on `feature/<name>` branches, open a quick PR, merge to `main`. P1 owns
-re-deploying `main` to the shared in-cluster Headlamp (Track B).
+See [`AGENTS.md`](./AGENTS.md) for the full script reference and Headlamp plugin
+patterns. Typical loop: `npm run start`, then `npm run tsc`, `npm run lint`, and
+`npm run test` before opening a PR.

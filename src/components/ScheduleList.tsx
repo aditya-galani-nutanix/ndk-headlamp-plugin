@@ -55,6 +55,8 @@ export interface ScheduleListProps {
   /** Scope to a single application (matches spec.applicationName). */
   application?: string;
   title?: string;
+  /** View-only: hide the per-row delete action, e.g. on Overview. */
+  readOnly?: boolean;
 }
 
 interface ScheduleRow {
@@ -82,7 +84,12 @@ function StatusChip({ state }: { state: ReturnType<typeof protectionPlanState> }
   return <Chip size="small" variant="outlined" label="Pending" />;
 }
 
-export function ScheduleList({ namespace, application, title = 'Schedules' }: ScheduleListProps) {
+export function ScheduleList({
+  namespace,
+  application,
+  title = 'Schedules',
+  readOnly = false,
+}: ScheduleListProps) {
   const [appPlans] = AppProtectionPlanClass.useList(namespace ? { namespace } : {});
   const [protectionPlans] = ProtectionPlanClass.useList(namespace ? { namespace } : {});
   const [jobSchedulers] = JobSchedulerClass.useList(namespace ? { namespace } : {});
@@ -173,22 +180,26 @@ export function ScheduleList({ namespace, application, title = 'Schedules' }: Sc
                 new Date(a.creationTimestamp ?? 0).getTime() -
                 new Date(b.creationTimestamp ?? 0).getTime(),
             },
-            {
-              label: 'Actions',
-              cellProps: { align: 'right' },
-              getter: (r: ScheduleRow) => (
-                <Tooltip title="Delete schedule (schedule, plan and binding)">
-                  <IconButton
-                    size="small"
-                    color="error"
-                    aria-label="Delete schedule"
-                    onClick={() => setDeleteFor(r)}
-                  >
-                    <Icon icon="mdi:delete" width={20} />
-                  </IconButton>
-                </Tooltip>
-              ),
-            },
+            ...(readOnly
+              ? []
+              : [
+                  {
+                    label: 'Actions',
+                    cellProps: { align: 'right' },
+                    getter: (r: ScheduleRow) => (
+                      <Tooltip title="Delete schedule (schedule, plan and binding)">
+                        <IconButton
+                          size="small"
+                          color="error"
+                          aria-label="Delete schedule"
+                          onClick={() => setDeleteFor(r)}
+                        >
+                          <Icon icon="mdi:delete" width={20} />
+                        </IconButton>
+                      </Tooltip>
+                    ),
+                  },
+                ]),
           ]}
           data={rows}
         />

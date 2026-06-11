@@ -20,6 +20,8 @@ import { SnapshotAndReplicateButton } from './SnapshotAndReplicate';
 export interface ApplicationListProps {
   namespace?: string;
   title?: string;
+  /** View-only: hide the create button and per-row actions (e.g. on Overview). */
+  readOnly?: boolean;
 }
 
 function ApplicationStatusChip({ status }: { status?: ApplicationStatus }) {
@@ -51,45 +53,59 @@ function ApplicationStatusChip({ status }: { status?: ApplicationStatus }) {
   return msg ? <Tooltip title={msg}>{chip}</Tooltip> : chip;
 }
 
-export function ApplicationList({ namespace, title = 'NDK Applications' }: ApplicationListProps) {
+export function ApplicationList({
+  namespace,
+  title = 'NDK Applications',
+  readOnly = false,
+}: ApplicationListProps) {
   const [apps] = ApplicationClass.useList(namespace ? { namespace } : {});
+
+  const columns: any[] = [
+    { label: 'Name', getter: (a: any) => a.metadata.name, sort: true },
+    { label: 'Namespace', getter: (a: any) => a.metadata.namespace ?? '—', sort: true },
+    {
+      label: 'Status',
+      getter: (a: any) => <ApplicationStatusChip status={a.jsonData?.status} />,
+    },
+    {
+      label: 'Resources',
+      getter: (a: any) => countApplicationResources(a.jsonData?.status?.summary) || '—',
+    },
+    {
+      label: 'Age',
+      getter: (a: any) => formatAge(a.metadata.creationTimestamp),
+      sort: (a: any, b: any) =>
+        new Date(a.metadata.creationTimestamp ?? 0).getTime() -
+        new Date(b.metadata.creationTimestamp ?? 0).getTime(),
+    },
+  ];
+  if (!readOnly) {
+    columns.push({
+      label: '',
+      getter: (a: any) => (
+        <SnapshotAndReplicateButton
+          application={a.metadata.name}
+          namespace={a.metadata.namespace}
+          variant="outlined"
+        />
+      ),
+    });
+  }
 
   return (
     <SectionBox title={title}>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
-        <CreateApplicationButton />
-      </Box>
+      {!readOnly && (
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+          <CreateApplicationButton />
+        </Box>
+      )}
       <SimpleTable
-        emptyMessage="No NDK Applications yet. Click “Create Application” to protect a workload."
-        columns={[
-          { label: 'Name', getter: (a: any) => a.metadata.name, sort: true },
-          { label: 'Namespace', getter: (a: any) => a.metadata.namespace ?? '—', sort: true },
-          {
-            label: 'Status',
-            getter: (a: any) => <ApplicationStatusChip status={a.jsonData?.status} />,
-          },
-          {
-            label: 'Resources',
-            getter: (a: any) => countApplicationResources(a.jsonData?.status?.summary) || '—',
-          },
-          {
-            label: 'Age',
-            getter: (a: any) => formatAge(a.metadata.creationTimestamp),
-            sort: (a: any, b: any) =>
-              new Date(a.metadata.creationTimestamp ?? 0).getTime() -
-              new Date(b.metadata.creationTimestamp ?? 0).getTime(),
-          },
-          {
-            label: '',
-            getter: (a: any) => (
-              <SnapshotAndReplicateButton
-                application={a.metadata.name}
-                namespace={a.metadata.namespace}
-                variant="outlined"
-              />
-            ),
-          },
-        ]}
+        emptyMessage={
+          readOnly
+            ? 'No NDK Applications yet.'
+            : 'No NDK Applications yet. Click “Create Application” to protect a workload.'
+        }
+        columns={columns}
         data={apps}
         defaultSortingColumn={4}
       />

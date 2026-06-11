@@ -51,9 +51,16 @@ const PHASE_COLOR: Record<InstallPhase, 'default' | 'info' | 'success' | 'error'
 export interface InstallNdkDialogProps {
   open: boolean;
   onClose: () => void;
+  // When NDK is already installed and ready on the cluster, the in-cluster
+  // install action is disabled so the user cannot re-run it.
+  alreadyInstalled?: boolean;
 }
 
-export function InstallNdkDialog({ open, onClose }: InstallNdkDialogProps) {
+export function InstallNdkDialog({
+  open,
+  onClose,
+  alreadyInstalled = false,
+}: InstallNdkDialogProps) {
   const [inputs, setInputs] = useState<InstallInputs>(DEFAULT_INPUTS);
   const [errors, setErrors] = useState<Partial<Record<keyof InstallInputs, string>>>({});
   const [image, setImage] = useState(DEFAULT_INSTALLER_IMAGE);
@@ -217,14 +224,30 @@ export function InstallNdkDialog({ open, onClose }: InstallNdkDialogProps) {
           </Alert>
         )}
 
+        {alreadyInstalled && (
+          <Alert severity="success" sx={{ mb: 2 }}>
+            NDK is already installed and ready on this cluster, so the in-cluster installer is
+            disabled. You can still review the inputs and generate the install script for reference.
+          </Alert>
+        )}
+
         <Typography variant="subtitle2" gutterBottom>
           Install
         </Typography>
-        {text('csiUrl', 'CSI chart URL', { required: true, placeholder: 'https://artifactory…/nutanix-csi-storage-<ver>.tgz' })}
-        {text('ndkUrl', 'NDK chart URL', { required: true, placeholder: 'https://artifactory…/ndk-<ver>.tgz' })}
+        {text('csiUrl', 'CSI chart URL', {
+          required: true,
+          placeholder: 'https://artifactory…/nutanix-csi-storage-<ver>.tgz',
+        })}
+        {text('ndkUrl', 'NDK chart URL', {
+          required: true,
+          placeholder: 'https://artifactory…/ndk-<ver>.tgz',
+        })}
         {text('artifactoryUsername', 'Artifactory username', { required: true })}
         {text('artifactoryApiKey', 'Artifactory API key', { required: true, password: true })}
-        {text('clusterName', 'Cluster name', { required: true, helper: 'Used for tls.server.clusterName' })}
+        {text('clusterName', 'Cluster name', {
+          required: true,
+          helper: 'Used for tls.server.clusterName',
+        })}
         {text('pcIp', 'Prism Central IP', { required: true, placeholder: '10.10.10.10' })}
         <Box sx={{ display: 'flex', gap: 2 }}>
           <FormControl fullWidth margin="dense" size="small">
@@ -301,39 +324,6 @@ export function InstallNdkDialog({ open, onClose }: InstallNdkDialogProps) {
         })}
 
         <Divider sx={{ my: 2 }} />
-        <FormControlLabel
-          control={
-            <Switch
-              checked={inputs.enableRemote}
-              onChange={e => set('enableRemote', e.target.checked)}
-            />
-          }
-          label="Register a remote peer for replication"
-        />
-        {inputs.enableRemote && (
-          <Box>
-            {text('remoteName', 'Remote name', { required: true })}
-            {text('remoteNdkServiceIp', 'Remote NDK service IP', {
-              required: true,
-              helper: 'IP of ndk-intercom-service on the peer cluster',
-            })}
-            <Box sx={{ display: 'flex', gap: 2 }}>
-              {text('remoteNdkServicePort', 'Remote NDK service port')}
-              {text('remoteClusterName', 'Remote cluster name (optional)')}
-            </Box>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={inputs.remoteSkipTlsVerify}
-                  onChange={e => set('remoteSkipTlsVerify', e.target.checked)}
-                />
-              }
-              label="Skip TLS verification of the remote"
-            />
-          </Box>
-        )}
-
-        <Divider sx={{ my: 2 }} />
         <Typography variant="subtitle2" gutterBottom>
           Advanced
         </Typography>
@@ -357,8 +347,8 @@ export function InstallNdkDialog({ open, onClose }: InstallNdkDialogProps) {
         />
 
         <Alert severity="info" sx={{ mt: 2 }}>
-          Run in cluster creates a Job (cluster-admin) in <code>ntnx-system</code>. The cluster needs
-          egress to Artifactory, github.com (cert-manager), hoth.corp.nutanix.com (canaveral),
+          Run in cluster creates a Job (cluster-admin) in <code>ntnx-system</code>. The cluster
+          needs egress to Artifactory, github.com (cert-manager), hoth.corp.nutanix.com (canaveral),
           nutanix.github.io, and — when the SyncRep LoadBalancer is on — kube-vip.io /
           raw.githubusercontent.com (kube-vip).
         </Alert>
@@ -441,8 +431,21 @@ export function InstallNdkDialog({ open, onClose }: InstallNdkDialogProps) {
         <Button onClick={handleGenerate} variant="outlined">
           Generate script
         </Button>
-        <Button onClick={handleRun} variant="contained" disabled={running && phase !== 'failed'}>
-          {running && phase !== 'failed' && phase !== 'succeeded' ? 'Running…' : 'Run in cluster'}
+        <Button
+          onClick={handleRun}
+          variant="contained"
+          disabled={alreadyInstalled || (running && phase !== 'failed')}
+          startIcon={
+            running && phase !== 'failed' && phase !== 'succeeded' ? (
+              <CircularProgress size={16} color="inherit" />
+            ) : undefined
+          }
+        >
+          {alreadyInstalled
+            ? 'Already installed'
+            : running && phase !== 'failed' && phase !== 'succeeded'
+            ? 'Running…'
+            : 'Run in cluster'}
         </Button>
       </DialogActions>
     </Dialog>

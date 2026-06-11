@@ -13,6 +13,8 @@ export interface ReplicationTargetListProps {
   /** Limit to a namespace (e.g. an Application detail view). Omit for all. */
   namespace?: string;
   title?: string;
+  /** View-only: hide the per-row delete action, e.g. on Overview. */
+  readOnly?: boolean;
 }
 
 function AvailabilityChip({ status }: { status?: ReplicationTargetStatus }) {
@@ -29,6 +31,7 @@ function AvailabilityChip({ status }: { status?: ReplicationTargetStatus }) {
 export function ReplicationTargetList({
   namespace,
   title = 'Replication targets',
+  readOnly = false,
 }: ReplicationTargetListProps) {
   const [targets] = ReplicationTargetClass.useList(namespace ? { namespace } : {});
 
@@ -59,16 +62,20 @@ export function ReplicationTargetList({
               new Date(a.metadata.creationTimestamp ?? 0).getTime() -
               new Date(b.metadata.creationTimestamp ?? 0).getTime(),
           },
-          {
-            label: 'Actions',
-            getter: (t: any) => (
-              <DeleteReplicationTargetButton
-                name={t.metadata.name}
-                namespace={t.metadata.namespace}
-                remoteName={t.jsonData?.spec?.remoteName}
-              />
-            ),
-          },
+          ...(readOnly
+            ? []
+            : [
+                {
+                  label: 'Actions',
+                  getter: (t: any) => (
+                    <DeleteReplicationTargetButton
+                      name={t.metadata.name}
+                      namespace={t.metadata.namespace}
+                      remoteName={t.jsonData?.spec?.remoteName}
+                    />
+                  ),
+                },
+              ]),
         ]}
         data={targets}
         defaultSortingColumn={5}

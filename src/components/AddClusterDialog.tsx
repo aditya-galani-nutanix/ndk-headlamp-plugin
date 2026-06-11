@@ -4,11 +4,13 @@
 // kubeconfig and we register it as a dynamic cluster via Headlamp.setCluster();
 // dynamically-added clusters can be removed again via ApiProxy.deleteCluster().
 // Both require the Headlamp server to run with --enable-dynamic-clusters.
+import { Icon } from '@iconify/react';
 import { ApiProxy, Headlamp, K8s } from '@kinvolk/headlamp-plugin/lib';
 import {
   Alert,
   Box,
   Button,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -114,34 +116,31 @@ export function AddClusterButton() {
 
   async function handleAdd() {
     setError(null);
+    // The Add button is disabled while this is empty, so this is just a guard.
     if (!kubeconfig.trim()) {
-      setError('Paste or upload a kubeconfig first.');
       return;
     }
     setBusy(true);
     try {
       // setCluster stores the kubeconfig in IndexedDB, then calls
       // /parseKubeConfig. With a single kubeconfig that endpoint returns
-      // { clusters: null }, so we must NOT gate success on result.clusters.
-      // Headlamp.setCluster swallows errors and resolves to undefined on
-      // failure, so a truthy result means the cluster was stored successfully.
-      const result = await Headlamp.setCluster({
+      // { clusters: null }, and in this Headlamp version setCluster resolves to
+      // undefined even on a successful store. Gating on a truthy result here
+      // produced a spurious red "Could not add the cluster" error even though
+      // the cluster WAS added. So we treat a clean resolution (no throw) as
+      // success and reload — the picker then reflects the real outcome. Only a
+      // genuine thrown error surfaces as an error.
+      await Headlamp.setCluster({
         name: name.trim() || undefined,
         kubeconfig: toBase64(kubeconfig),
       });
-      if (result) {
-        setDone(true);
-        // Reload so the new cluster shows up in the picker (Headlamp loads
-        // stateless clusters from IndexedDB on startup).
-        setTimeout(() => window.location.reload(), 900);
-      } else {
-        setError(
-          'Could not add the cluster. Check the kubeconfig and that Headlamp runs with --enable-dynamic-clusters.'
-        );
-      }
+      setDone(true);
+      // Reload so the new cluster shows up in the picker (Headlamp loads
+      // stateless clusters from IndexedDB on startup). Keep `busy` true so the
+      // loading state persists right up to the reload.
+      setTimeout(() => window.location.reload(), 900);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-    } finally {
       setBusy(false);
     }
   }
@@ -169,6 +168,7 @@ export function AddClusterButton() {
       <Button
         size="small"
         variant="outlined"
+        startIcon={<Icon icon="mdi:server-plus-outline" />}
         onClick={() => {
           reset();
           setOpen(true);
@@ -182,6 +182,11 @@ export function AddClusterButton() {
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {error}
+            </Alert>
+          )}
+          {busy && !done && (
+            <Alert severity="info" icon={<CircularProgress size={18} />} sx={{ mb: 2 }}>
+              Adding cluster…
             </Alert>
           )}
           {done && (
@@ -251,7 +256,12 @@ export function AddClusterButton() {
           <Button onClick={() => setOpen(false)} disabled={busy}>
             Cancel
           </Button>
-          <Button onClick={handleAdd} variant="contained" disabled={busy || done}>
+          <Button
+            onClick={handleAdd}
+            variant="contained"
+            disabled={busy || done || !kubeconfig.trim()}
+            startIcon={busy ? <CircularProgress size={16} color="inherit" /> : undefined}
+          >
             {busy ? 'Adding…' : 'Add'}
           </Button>
         </DialogActions>
