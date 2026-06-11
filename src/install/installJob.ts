@@ -184,7 +184,10 @@ export async function launchInstallJob(
     ApiProxy.post(`/api/v1/namespaces/${INSTALL_NAMESPACE}/configmaps`, m.configMap),
     ApiProxy.post(`/api/v1/namespaces/${INSTALL_NAMESPACE}/serviceaccounts`, m.serviceAccount),
   ]);
-  await ApiProxy.post('/apis/rbac.authorization.k8s.io/v1/clusterrolebindings', m.clusterRoleBinding);
+  await ApiProxy.post(
+    '/apis/rbac.authorization.k8s.io/v1/clusterrolebindings',
+    m.clusterRoleBinding
+  );
   await ApiProxy.post(`/apis/batch/v1/namespaces/${INSTALL_NAMESPACE}/jobs`, m.job);
 
   return handle;
@@ -257,7 +260,11 @@ export function watchJobStatus(
       const succeeded = Number(status.succeeded ?? 0);
       const failed = Number(status.failed ?? 0);
       const active = Number(status.active ?? 0);
-      const conditions = (status.conditions ?? []) as { type?: string; status?: string; message?: string }[];
+      const conditions = (status.conditions ?? []) as {
+        type?: string;
+        status?: string;
+        message?: string;
+      }[];
       const failedCond = conditions.find(c => c.type === 'Failed' && c.status === 'True');
       if (succeeded > 0) {
         onStatus('succeeded');

@@ -17,7 +17,11 @@ vi.mock('./ndk-resources', () => ({
   ReplicationTargetClass: { apiEndpoint: { post: mocks.rtPost, delete: mocks.rtDelete } },
 }));
 
-import { createReplicationTarget, deleteReplicationTarget, ensureReplicationTarget } from './ndk-actions';
+import {
+  createReplicationTarget,
+  deleteReplicationTarget,
+  ensureReplicationTarget,
+} from './ndk-actions';
 
 beforeEach(() => {
   mocks.rtPost.mockReset();

@@ -4,6 +4,7 @@
 // kubeconfig and we register it as a dynamic cluster via Headlamp.setCluster();
 // dynamically-added clusters can be removed again via ApiProxy.deleteCluster().
 // Both require the Headlamp server to run with --enable-dynamic-clusters.
+import { Icon } from '@iconify/react';
 import { ApiProxy, Headlamp, K8s } from '@kinvolk/headlamp-plugin/lib';
 import {
   Alert,
@@ -167,6 +168,7 @@ export function AddClusterButton() {
       <Button
         size="small"
         variant="outlined"
+        startIcon={<Icon icon="mdi:server-plus-outline" />}
         onClick={() => {
           reset();
           setOpen(true);

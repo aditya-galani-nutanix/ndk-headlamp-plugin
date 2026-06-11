@@ -151,7 +151,8 @@ export function DeleteReplicationTargetDialog({
   // Could not enumerate NearSync protections for a reason OTHER than the CRD
   // being absent — we can't fully verify, so flag it (a 404/NotFound means the
   // CRD is simply not installed, which is safe).
-  const nspUnverified = Boolean(nspError) && !/not\s*found|404|could not find/i.test(errMessage(nspError));
+  const nspUnverified =
+    Boolean(nspError) && !/not\s*found|404|could not find/i.test(errMessage(nspError));
 
   async function handleDelete() {
     setError(null);

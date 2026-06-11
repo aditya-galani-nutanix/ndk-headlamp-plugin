@@ -33,6 +33,8 @@ export interface SnapshotListProps {
   /** Scope the list to a single application (matches spec.source.applicationRef.name). */
   application?: string;
   title?: string;
+  /** View-only: hide per-row actions (restore/replicate/delete), e.g. on Overview. */
+  readOnly?: boolean;
 }
 
 function SnapshotStatusChip({ status }: { status?: ApplicationSnapshotStatus }) {
@@ -50,7 +52,12 @@ function SnapshotStatusChip({ status }: { status?: ApplicationSnapshotStatus }) 
   return <Chip size="small" variant="outlined" label="Pending" />;
 }
 
-export function SnapshotList({ namespace, application, title = 'Snapshots' }: SnapshotListProps) {
+export function SnapshotList({
+  namespace,
+  application,
+  title = 'Snapshots',
+  readOnly = false,
+}: SnapshotListProps) {
   const [snapshots] = ApplicationSnapshotClass.useList(namespace ? { namespace } : {});
   const [replications] = ApplicationSnapshotReplicationClass.useList(
     namespace ? { namespace } : {}
@@ -139,66 +146,78 @@ export function SnapshotList({ namespace, application, title = 'Snapshots' }: Sn
                 new Date(a.metadata.creationTimestamp ?? 0).getTime() -
                 new Date(b.metadata.creationTimestamp ?? 0).getTime(),
             },
-            {
-              label: '',
-              gridTemplate: 'max-content',
-              cellProps: { sx: { whiteSpace: 'nowrap' } },
-              getter: (s: any) => {
-                const ready = snapshotState(s.jsonData?.status) === 'ready';
-                const ns = s.metadata.namespace ?? '';
-                return (
-                  <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'nowrap' }}>
-                    <RestoreButton
-                      snapshotName={s.metadata.name}
-                      namespace={ns}
-                      restorable={isRestorableSnapshot(s.jsonData)}
-                      existingRestoreState={aggregateRestoreState(
-                        restores,
-                        s.metadata.name,
-                        s.metadata.namespace
-                      )}
-                    />
-                    <Tooltip
-                      title={
-                        ready
-                          ? 'Replicate this snapshot to another cluster'
-                          : 'Available once the snapshot is ready'
-                      }
-                    >
-                      <span>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          disabled={!ready}
-                          startIcon={<Icon icon="mdi:content-copy" />}
-                          onClick={() => setReplicateFor({ name: s.metadata.name, namespace: ns })}
+            ...(readOnly
+              ? []
+              : [
+                  {
+                    label: '',
+                    gridTemplate: 'max-content',
+                    cellProps: { sx: { whiteSpace: 'nowrap' } },
+                    getter: (s: any) => {
+                      const ready = snapshotState(s.jsonData?.status) === 'ready';
+                      const ns = s.metadata.namespace ?? '';
+                      return (
+                        <Stack
+                          direction="row"
+                          spacing={1}
+                          alignItems="center"
+                          sx={{ flexWrap: 'nowrap' }}
                         >
-                          Replicate
-                        </Button>
-                      </span>
-                    </Tooltip>
-                    <Tooltip title="Delete snapshot (and its replications)">
-                      <IconButton
-                        size="small"
-                        color="error"
-                        aria-label="Delete snapshot"
-                        onClick={() =>
-                          setDeleteFor({
-                            name: s.metadata.name,
-                            namespace: ns,
-                            replicationNames: replicationsFor(s.metadata.name, s.metadata.namespace).map(
-                              r => r.metadata.name
-                            ),
-                          })
-                        }
-                      >
-                        <Icon icon="mdi:delete" width={20} />
-                      </IconButton>
-                    </Tooltip>
-                  </Stack>
-                );
-              },
-            },
+                          <RestoreButton
+                            snapshotName={s.metadata.name}
+                            namespace={ns}
+                            restorable={isRestorableSnapshot(s.jsonData)}
+                            existingRestoreState={aggregateRestoreState(
+                              restores,
+                              s.metadata.name,
+                              s.metadata.namespace
+                            )}
+                          />
+                          <Tooltip
+                            title={
+                              ready
+                                ? 'Replicate this snapshot to another cluster'
+                                : 'Available once the snapshot is ready'
+                            }
+                          >
+                            <span>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                disabled={!ready}
+                                startIcon={<Icon icon="mdi:content-copy" />}
+                                onClick={() =>
+                                  setReplicateFor({ name: s.metadata.name, namespace: ns })
+                                }
+                              >
+                                Replicate
+                              </Button>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title="Delete snapshot (and its replications)">
+                            <IconButton
+                              size="small"
+                              color="error"
+                              aria-label="Delete snapshot"
+                              onClick={() =>
+                                setDeleteFor({
+                                  name: s.metadata.name,
+                                  namespace: ns,
+                                  replicationNames: replicationsFor(
+                                    s.metadata.name,
+                                    s.metadata.namespace
+                                  ).map(r => r.metadata.name),
+                                })
+                              }
+                            >
+                              <Icon icon="mdi:delete" width={20} />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
+                      );
+                    },
+                  },
+                ]),
           ]}
           data={data}
           defaultSortingColumn={6}

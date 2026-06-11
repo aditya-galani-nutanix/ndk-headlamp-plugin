@@ -2,8 +2,9 @@
 // in ntnx-system and looking for an *Available* ndk-controller-manager. The
 // button renders when NDK is absent OR present-but-not-ready (e.g. a failed or
 // partial install), so the user can install or recover.
+import { Icon } from '@iconify/react';
 import { K8s } from '@kinvolk/headlamp-plugin/lib';
-import { Button } from '@mui/material';
+import { Button, Tooltip } from '@mui/material';
 import { useState } from 'react';
 import { INSTALL_NAMESPACE } from '../install/installJob';
 import { InstallNdkDialog } from './InstallNdkDialog';
@@ -48,15 +49,43 @@ export function useNdkInstalled(): boolean | null {
 }
 
 export function InstallNdkButton() {
+  const cluster = K8s.useCluster();
   const installed = useNdkInstalled();
   const [open, setOpen] = useState(false);
 
-  // The button is always shown. When NDK is already installed and ready, the
-  // dialog still opens (so the user can review inputs / generate the script),
-  // but the in-cluster install action is disabled inside the form.
+  // On the home / cluster-list screen there is no active cluster, so installing
+  // NDK is meaningless. Show the action disabled with an explanation instead of
+  // letting the user open a dialog that has nowhere to install to.
+  if (!cluster) {
+    return (
+      <Tooltip title="Open a cluster first to install NDK">
+        <span>
+          <Button
+            size="small"
+            variant="outlined"
+            color="primary"
+            startIcon={<Icon icon="mdi:cloud-download-outline" />}
+            disabled
+          >
+            Install NDK
+          </Button>
+        </span>
+      </Tooltip>
+    );
+  }
+
+  // Inside a cluster the button is always shown. When NDK is already installed
+  // and ready, the dialog still opens (so the user can review inputs / generate
+  // the script), but the in-cluster install action is disabled inside the form.
   return (
     <>
-      <Button size="small" variant="outlined" color="primary" onClick={() => setOpen(true)}>
+      <Button
+        size="small"
+        variant="outlined"
+        color="primary"
+        startIcon={<Icon icon="mdi:cloud-download-outline" />}
+        onClick={() => setOpen(true)}
+      >
         Install NDK
       </Button>
       <InstallNdkDialog

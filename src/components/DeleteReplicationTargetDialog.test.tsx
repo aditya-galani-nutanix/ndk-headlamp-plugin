@@ -31,7 +31,10 @@ vi.mock('../api/ndk-resources', () => ({
 import { DeleteReplicationTargetDialog } from './DeleteReplicationTargetDialog';
 
 function asr(name: string, namespace: string, targetName: string) {
-  return { metadata: { name, namespace }, jsonData: { spec: { replicationTargetName: targetName } } };
+  return {
+    metadata: { name, namespace },
+    jsonData: { spec: { replicationTargetName: targetName } },
+  };
 }
 function plan(name: string, namespace: string, targetName: string) {
   return {
@@ -80,7 +83,10 @@ describe('DeleteReplicationTargetDialog', () => {
     await user.click(del);
 
     expect(mocks.deleteReplicationTarget).toHaveBeenCalledTimes(1);
-    expect(mocks.deleteReplicationTarget).toHaveBeenCalledWith({ name: 'rt-a', namespace: 'mongo' });
+    expect(mocks.deleteReplicationTarget).toHaveBeenCalledWith({
+      name: 'rt-a',
+      namespace: 'mongo',
+    });
     expect(await screen.findByText(/deleted from/i)).toBeInTheDocument();
   });
 
@@ -115,7 +121,10 @@ describe('DeleteReplicationTargetDialog', () => {
     const del = screen.getByRole('button', { name: 'Delete' });
     expect(del).toBeEnabled();
     await user.click(del);
-    expect(mocks.deleteReplicationTarget).toHaveBeenCalledWith({ name: 'rt-a', namespace: 'mongo' });
+    expect(mocks.deleteReplicationTarget).toHaveBeenCalledWith({
+      name: 'rt-a',
+      namespace: 'mongo',
+    });
   });
 
   it('disables Delete while dependents are still loading', () => {
@@ -127,7 +136,10 @@ describe('DeleteReplicationTargetDialog', () => {
   });
 
   it('treats a missing NearSync CRD (useList error) as no dependents', () => {
-    mocks.nsps = [null, { status: 404, message: 'the server could not find the requested resource' }];
+    mocks.nsps = [
+      null,
+      { status: 404, message: 'the server could not find the requested resource' },
+    ];
     renderDialog();
 
     // Not blocked, and Delete is enabled.

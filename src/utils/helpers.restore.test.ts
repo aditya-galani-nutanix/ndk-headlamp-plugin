@@ -22,11 +22,7 @@ import {
   restoreState,
 } from './helpers';
 
-function progressing(
-  status: 'True' | 'False',
-  reason?: string,
-  message?: string
-): KubeCondition {
+function progressing(status: 'True' | 'False', reason?: string, message?: string): KubeCondition {
   return { type: 'Progressing', status, reason, message };
 }
 
@@ -95,7 +91,9 @@ describe('restoreState', () => {
 describe('restoreMessage', () => {
   it('prefers the Progressing condition message', () => {
     const status: ApplicationSnapshotRestoreStatus = {
-      conditions: [progressing('True', 'RestoringApplicationConfig', 'Application config is being restored')],
+      conditions: [
+        progressing('True', 'RestoringApplicationConfig', 'Application config is being restored'),
+      ],
     };
     expect(restoreMessage(status)).toBe('Application config is being restored');
   });
@@ -104,7 +102,12 @@ describe('restoreMessage', () => {
     const status: ApplicationSnapshotRestoreStatus = {
       conditions: [
         progressing('True', 'RunningPrechecks'),
-        { type: 'PrechecksPassed', status: 'False', reason: 'ResourcesAlreadyExist', message: 'app already exists' },
+        {
+          type: 'PrechecksPassed',
+          status: 'False',
+          reason: 'ResourcesAlreadyExist',
+          message: 'app already exists',
+        },
       ],
     };
     expect(restoreMessage(status)).toBe('app already exists');
@@ -121,7 +124,8 @@ describe('restoreMessage', () => {
   // failing condition. The UI must surface the real error, not the pointer.
   // (asr_prechecks.go / asr_appconfig_restore.go / asr_volume_restore_request.go)
   it('surfaces the real error (not the "See ... condition" pointer) on terminal failure', () => {
-    const realError = 'Resources to restore already exist in the kubernetes cluster: [Deployment/mongo]';
+    const realError =
+      'Resources to restore already exist in the kubernetes cluster: [Deployment/mongo]';
     const status: ApplicationSnapshotRestoreStatus = {
       completed: false,
       startTime: '2026-06-02T00:00:00Z',
@@ -248,9 +252,9 @@ describe('replicationsForSnapshot', () => {
   // replications (this list feeds the count AND the delete cascade).
   it('does not match a same-named snapshot in another namespace', () => {
     const repls = [repl('mongo-snap-1', 'team-a', 'r1')];
-    expect(replicationsForSnapshot(repls, 'mongo-snap-1', 'team-a').map(r => r.metadata.name)).toEqual([
-      'r1',
-    ]);
+    expect(
+      replicationsForSnapshot(repls, 'mongo-snap-1', 'team-a').map(r => r.metadata.name)
+    ).toEqual(['r1']);
     expect(replicationsForSnapshot(repls, 'mongo-snap-1', 'team-b')).toEqual([]);
   });
 

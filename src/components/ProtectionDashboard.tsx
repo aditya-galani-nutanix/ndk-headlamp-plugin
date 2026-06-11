@@ -1,7 +1,11 @@
-// Owner: P1 — landing page for the plugin at /ndk.
-// Shows live summary cards. Each owner links their feature in here as it lands.
+// Owner: P1 — Overview landing page for the plugin at /ndk.
+//
+// A read-only, at-a-glance summary: install state and headline counts. All
+// create/manage actions and the full per-resource tables live on their own
+// subsection pages (Applications, Snapshots, Replications, Remotes, Replication
+// Targets, Schedules).
 import { SectionBox } from '@kinvolk/headlamp-plugin/lib/CommonComponents';
-import { Box, Card, CardContent, Typography } from '@mui/material';
+import { Box, Card, CardContent, CircularProgress, Typography } from '@mui/material';
 import {
   ApplicationClass,
   ApplicationSnapshotClass,
@@ -11,17 +15,27 @@ import {
 import { replicationState, snapshotState } from '../utils/helpers';
 import { ApplicationList } from './ApplicationList';
 import { InstallNdkButton, useNdkInstalled } from './InstallNdkButton';
+import { RemoteList } from './RemoteList';
 import { ReplicationList } from './ReplicationList';
-import { ScheduleButton } from './ScheduleForm';
+import { ReplicationTargetList } from './ReplicationTargetList';
 import { ScheduleList } from './ScheduleList';
-import { SnapshotAndReplicateButton } from './SnapshotAndReplicate';
 import { SnapshotList } from './SnapshotList';
 
-function SummaryCard({ title, value }: { title: string; value: string | number }) {
+function SummaryCard({
+  title,
+  value,
+  color,
+}: {
+  title: string;
+  value: string | number;
+  color?: string;
+}) {
   return (
-    <Card variant="outlined" sx={{ minWidth: 160 }}>
+    <Card variant="outlined" sx={{ minWidth: 150, flex: '1 1 150px', maxWidth: 220 }}>
       <CardContent>
-        <Typography variant="h4">{value}</Typography>
+        <Typography variant="h4" sx={{ color }}>
+          {value}
+        </Typography>
         <Typography color="textSecondary" variant="body2">
           {title}
         </Typography>
@@ -49,11 +63,14 @@ export function ProtectionDashboard() {
     r => replicationState((r.jsonData as any)?.status) === 'blocked'
   ).length;
 
+  // While the first round of resource lists is still in flight, every list is
+  // null. Show one calm spinner instead of a wall of "0" cards that pop to real
+  // numbers a moment later.
+  const loadingSummary =
+    applications === null && snapshots === null && replications === null && schedules === null;
+
   return (
-    <SectionBox title="NDK Data Protection">
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mb: 2 }}>
-        <ScheduleButton variant="outlined" />
-      </Box>
+    <SectionBox title="Overview">
       {ndkInstalled === false && (
         <Card variant="outlined" sx={{ mb: 2, borderColor: 'warning.main' }}>
           <CardContent
@@ -66,7 +83,9 @@ export function ProtectionDashboard() {
             }}
           >
             <Box>
-              <Typography variant="h6">NDK is not installed or not ready on this cluster</Typography>
+              <Typography variant="h6">
+                NDK is not installed or not ready on this cluster
+              </Typography>
               <Typography color="textSecondary" variant="body2">
                 Install (or re-run setup to recover) the CSI prerequisites and NDK to start
                 protecting applications.
@@ -76,23 +95,44 @@ export function ProtectionDashboard() {
           </CardContent>
         </Card>
       )}
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-        <SnapshotAndReplicateButton />
-      </Box>
-      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
-        <SummaryCard title="Applications" value={(applications ?? []).length} />
-        <SummaryCard title="Snapshots" value={snaps.length} />
-        <SummaryCard title="Ready" value={ready} />
-        <SummaryCard title="Failed" value={failed} />
-        <SummaryCard title="Replications" value={repls.length} />
-        <SummaryCard title="Replicating" value={replicating} />
-        <SummaryCard title="Blocked" value={blocked} />
-        <SummaryCard title="Schedules" value={(schedules ?? []).length} />
-      </Box>
-      <ApplicationList />
-      <SnapshotList />
+
+      {loadingSummary ? (
+        <Box
+          sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, py: 6 }}
+        >
+          <CircularProgress size={26} />
+          <Typography color="textSecondary" variant="body2">
+            Loading protection data…
+          </Typography>
+        </Box>
+      ) : (
+        <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          <SummaryCard title="Applications" value={(applications ?? []).length} />
+          <SummaryCard title="Snapshots" value={snaps.length} />
+          <SummaryCard title="Ready" value={ready} color="success.main" />
+          <SummaryCard title="Failed" value={failed} color={failed ? 'error.main' : undefined} />
+          <SummaryCard title="Replications" value={repls.length} />
+          <SummaryCard title="Replicating" value={replicating} color="info.main" />
+          <SummaryCard
+            title="Blocked"
+            value={blocked}
+            color={blocked ? 'warning.main' : undefined}
+          />
+          <SummaryCard title="Schedules" value={(schedules ?? []).length} />
+        </Box>
+      )}
+
+      <Typography color="textSecondary" variant="body2" sx={{ mt: 3, mb: 1 }}>
+        Everything protected on this cluster, at a glance. Open a section in the sidebar to create
+        or manage these resources.
+      </Typography>
+
+      <ApplicationList readOnly />
+      <SnapshotList readOnly />
       <ReplicationList />
-      <ScheduleList />
+      <ReplicationTargetList readOnly />
+      <RemoteList />
+      <ScheduleList readOnly />
     </SectionBox>
   );
 }

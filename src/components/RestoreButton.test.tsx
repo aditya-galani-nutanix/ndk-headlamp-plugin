@@ -107,9 +107,7 @@ describe('RestoreDialog workflow', () => {
     const name = mocks.createRestore.mock.calls[0][0].name;
 
     // Controller finishes the restore successfully.
-    mocks.restoreStore.list = [
-      restoreCR(name, { completed: true, boundApplication: 'mongo-app' }),
-    ];
+    mocks.restoreStore.list = [restoreCR(name, { completed: true, boundApplication: 'mongo-app' })];
     view.rerender(<RestoreButton snapshotName={SNAP} namespace={NS} restorable />);
 
     expect(await screen.findByText(/restored successfully/i)).toBeInTheDocument();
@@ -123,7 +121,8 @@ describe('RestoreDialog workflow', () => {
     // Shaped exactly like the k8s-juno controller writes a precheck failure: the
     // Progressing condition only points at another condition, while the real
     // error lives on status.error + the type-specific (PrechecksPassed) condition.
-    const realError = 'Resources to restore already exist in the kubernetes cluster: [Deployment/mongo]';
+    const realError =
+      'Resources to restore already exist in the kubernetes cluster: [Deployment/mongo]';
     mocks.restoreStore.list = [
       restoreCR(name, {
         completed: false,
@@ -163,7 +162,12 @@ describe('RestoreDialog workflow', () => {
         completed: false,
         startTime: '2026-06-02T00:00:00Z',
         conditions: [
-          { type: 'Progressing', status: 'True', reason: 'RunningPrechecks', message: 'Prechecks are being run' },
+          {
+            type: 'Progressing',
+            status: 'True',
+            reason: 'RunningPrechecks',
+            message: 'Prechecks are being run',
+          },
         ],
       }),
     ];
@@ -187,8 +191,6 @@ describe('RestoreDialog workflow', () => {
   it('surfaces a failed CR creation (e.g. webhook rejection) as an error', async () => {
     mocks.createRestore.mockRejectedValue(new Error('admission webhook denied the request'));
     await openAndConfirm();
-    expect(
-      await screen.findByText('admission webhook denied the request')
-    ).toBeInTheDocument();
+    expect(await screen.findByText('admission webhook denied the request')).toBeInTheDocument();
   });
 });

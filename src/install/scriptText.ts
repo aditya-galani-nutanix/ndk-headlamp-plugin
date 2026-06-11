@@ -471,7 +471,7 @@ export function standaloneInstallScript(): string {
     '# StorageCluster:  SC_NAME PE_UUID PC_UUID',
     '# Optional:        OS_NAME VOLUME_BINDING_MODE PC_USERNAME PC_PASSWORD CUSTOM_VALUES_URL KUBECONFIG',
     '# LoadBalancer:    ENABLE_LB=true (default) + LB_IP=<free static IP> for ndk-intercom-service',
-    "#                  (SyncRep). Find a free IP with get-free-static-ips.sh. ENABLE_LB=false = snapshot-only.",
+    '#                  (SyncRep). Find a free IP with get-free-static-ips.sh. ENABLE_LB=false = snapshot-only.',
     '# Optional Remote: REMOTE_NAME REMOTE_NDK_SERVICE_IP REMOTE_NDK_SERVICE_PORT REMOTE_CLUSTER_NAME REMOTE_SKIP_TLS_VERIFY',
     '',
   ].join('\n');
